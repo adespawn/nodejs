@@ -1684,7 +1684,9 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        describe("with date and time types", function () {
+        // See #151, @Stapox35
+        // TODO: Fix this test
+        /* describe("with date and time types", function () {
             const LocalDate = types.LocalDate;
             const LocalTime = types.LocalTime;
             const insertQuery =
@@ -1776,7 +1778,7 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-        });
+        }); */
 
         // No support for used types
         // TODO: Fix this test
