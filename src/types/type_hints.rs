@@ -1,8 +1,12 @@
-use napi::JsObject;
-
 use crate::utils::js_error;
 
 use super::type_wrappers::{ComplexType, CqlType};
+
+#[napi(object)]
+pub struct TypeHint {
+    pub code: i32,
+    pub info: Option<Option<Vec<TypeHint>>>,
+}
 
 /// Convert the number representing CQL type to the internal type, representing CQL type
 fn type_code_to_cql_type(value: i32) -> Result<CqlType, napi::Error> {
@@ -46,22 +50,31 @@ fn type_code_to_cql_type(value: i32) -> Result<CqlType, napi::Error> {
 /// Convert single hint from the format expected by API of the driver
 /// to the ``ComplexType`` that is used internally in the rust part of the code
 #[napi]
-pub fn convert_hint(hint: Option<JsObject>) -> napi::Result<Option<ComplexType>> {
+pub fn convert_hint(hint: Option<TypeHint>) -> napi::Result<Option<ComplexType>> {
     let hint = match hint {
         Some(v) => v,
         None => {
             return Ok(None);
         }
     };
-    let base_type = type_code_to_cql_type(hint.get_named_property("code")?)?;
+    let base_type = type_code_to_cql_type(hint.code)?;
+    let support_types = hint.info.flatten();
 
     Ok(Some(match base_type {
         CqlType::List | CqlType::Set => {
-            let support_type = convert_hint(hint.get_named_property("info").ok())?;
+            // Ensure there is no value in info field, or there is exactly one support type
+            let mut support_types = support_types.unwrap_or_default();
+            if support_types.len() > 1 {
+                return Err(js_error(format!(
+                    "Invalid number of support types. Got {}, expected no more than one.",
+                    support_types.len()
+                )));
+            }
+            let support_type = convert_hint(support_types.pop())?;
             ComplexType::one_support(base_type, support_type)
         }
         CqlType::Map | CqlType::Tuple => {
-            let support_types: Vec<JsObject> = hint.get_named_property("info").unwrap_or_default();
+            let support_types: Vec<TypeHint> = support_types.unwrap_or_default();
 
             let mut support_types: Vec<Option<ComplexType>> = support_types
                 .into_iter()
