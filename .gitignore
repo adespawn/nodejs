@@ -2,6 +2,8 @@
 index.js
 index.d.ts
 
+mach/
+
 npm/
 
 lib-cov

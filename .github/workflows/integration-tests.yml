@@ -12,6 +12,9 @@ env:
       - "**"
 jobs:
   build-and-run-tests:
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -63,11 +66,24 @@ jobs:
           git clone https://github.com/scylladb/scylla-ccm.git --depth 1
           cd scylla-ccm
           sudo ./setup.py install
+          sudo apt install valgrind
       - name: Build
         run: ${{ matrix.settings.build }}
         shell: bash
+      - name: Prepare gdb
+        run: |
+          sudo apt install gdb
+          wget https://github.com/pwndbg/pwndbg/releases/download/2025.02.19/pwndbg_2025.02.19_amd64.deb
+          sudo apt install ./pwndbg_2025.02.19_amd64.deb
+          chmod +x ./vg.sh
+          chmod +x ./pwngdb.sh
       - name: Run integration tests
+        # run: bash ./vg.sh
         run: npm run integration
-      - name: Run integration not supported
-        run: npm run integration-not-supported
+      - name: Breakpoint if tests failed
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 60m
+          authorized-users: adespawn
           

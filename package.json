@@ -49,7 +49,7 @@
     "temp": ">= 0.8.3"
   },
   "scripts": {
-    "build": "napi build --platform --release",
+    "build": "napi build --platform",
     "all-tests": "npm run unit && npm run integration_short && npm run integration_long",
     "unit": "./node_modules/.bin/mocha test/unit -t 5000 --recursive",
     "unit-not-supported": "./node_modules/.bin/mocha test/unit-not-supported -t 5000 --recursive",

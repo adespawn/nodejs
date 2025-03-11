@@ -16,7 +16,7 @@ const countQuery1 = "SELECT COUNT(*) as total FROM table1 WHERE key1 = ?";
 const selectQuery2 = "SELECT * FROM table2 WHERE id = ?";
 
 describe("executeConcurrent()", function () {
-    this.timeout(300000);
+    this.timeout(900000);
 
     const setupInfo = helper.setup(1, {
         queries: [

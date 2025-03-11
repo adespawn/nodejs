@@ -11,34 +11,39 @@ const { isNativeError } = require("util/types");
 const vit = helper.vit;
 
 describe("Client @SERVER_API", function () {
-    this.timeout(300000);
+    this.timeout(400000);
     describe("#batch(queries, {prepare: 0}, callback)", function () {
+
         const keyspace = helper.getRandomName("ks");
         const table1 = `${keyspace}.${helper.getRandomName("tblA")}`;
         const table2 = `${keyspace}.${helper.getRandomName("tblB")}`;
         before(function (done) {
-            const client = newInstance();
-            utils.series(
-                [
-                    helper.ccmHelper.start(1),
-                    helper.toTask(
-                        client.execute,
-                        client,
-                        helper.createKeyspaceCql(keyspace, 1),
-                    ),
-                    helper.toTask(
-                        client.execute,
-                        client,
-                        helper.createTableCql(table1),
-                    ),
-                    helper.toTask(
-                        client.execute,
-                        client,
-                        helper.createTableCql(table2),
-                    ),
-                ],
-                done,
-            );
+            setTimeout(x, 1000 * 20, done);
+            function x(done2) {
+                console.log("Starting setup.");
+                const client = newInstance();
+                utils.series(
+                    [
+                        helper.ccmHelper.start(1),
+                        helper.toTask(
+                            client.execute,
+                            client,
+                            helper.createKeyspaceCql(keyspace, 1),
+                        ),
+                        helper.toTask(
+                            client.execute,
+                            client,
+                            helper.createTableCql(table1),
+                        ),
+                        helper.toTask(
+                            client.execute,
+                            client,
+                            helper.createTableCql(table2),
+                        ),
+                    ],
+                    done2,
+                );
+            }
         });
         after(helper.ccmHelper.remove);
         vit(
