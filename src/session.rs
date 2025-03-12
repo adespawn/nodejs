@@ -1,3 +1,6 @@
+use std::panic;
+use std::time::Duration;
+
 use scylla::client::session::Session;
 use scylla::client::session_builder::SessionBuilder;
 use scylla::client::SelfIdentity;
@@ -43,10 +46,21 @@ impl SessionOptions {
     }
 }
 
+static mut once: bool = false;
+ 
 #[napi]
 impl SessionWrapper {
     #[napi]
     pub async fn create_session(options: &SessionOptions) -> napi::Result<Self> {
+        unsafe {
+            if !once {
+                panic::set_hook(Box::new(|_| {
+                    println!("Stopped\n");
+                    std::thread::sleep(Duration::from_secs(1000000))
+                }));
+                once = true;
+            }
+        }
         let s = SessionBuilder::new()
             .known_node(options.connect_points[0].clone())
             .custom_identity(get_self_identity(options))

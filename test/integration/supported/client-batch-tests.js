@@ -18,7 +18,7 @@ describe("Client @SERVER_API", function () {
         const table1 = `${keyspace}.${helper.getRandomName("tblA")}`;
         const table2 = `${keyspace}.${helper.getRandomName("tblB")}`;
         before(function (done) {
-            setTimeout(x, 1000 * 20, done);
+            setTimeout(x, /* 1000 * */ 20, done);
             function x(done2) {
                 console.log("Starting setup.");
                 const client = newInstance();
