@@ -26,4 +26,4 @@ lto = true
 strip = "symbols"
 
 [profile.dev]
-panic = "abort"
+panic = "unwind"
