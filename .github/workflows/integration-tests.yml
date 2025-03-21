@@ -67,6 +67,7 @@ jobs:
           cd scylla-ccm
           sudo ./setup.py install
           sudo apt install valgrind
+          rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: Build
         run: ${{ matrix.settings.build }}
         shell: bash
