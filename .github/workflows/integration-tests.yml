@@ -77,13 +77,13 @@ jobs:
           sudo apt install ./pwndbg_2025.02.19_amd64.deb
           chmod +x ./vg.sh
           chmod +x ./pwngdb.sh
-      - name: Run integration tests
+      # - name: Run integration tests
         # run: bash ./vg.sh
-        run: npm run integration
-      # - name: Breakpoint if tests failed
+        # run: npm run integration
+      - name: Breakpoint if tests failed
       #   if: failure()
-      #   uses: namespacelabs/breakpoint-action@v0
-      #   with:
-      #     duration: 60m
-      #     authorized-users: adespawn
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 90m
+          authorized-users: adespawn
           

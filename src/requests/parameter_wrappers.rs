@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use napi::bindgen_prelude::{BigInt, Buffer};
 use scylla::value::{Counter, CqlTimestamp, CqlTimeuuid, CqlValue};
 
@@ -188,6 +190,7 @@ impl QueryParameterWrapper {
     pub(crate) fn extract_parameters(
         row: Vec<Option<&QueryParameterWrapper>>,
     ) -> Vec<Option<CqlValue>> {
+        sleep(Duration::from_millis(100));
         row.iter()
             .map(|e| e.as_ref().map(|v| v.parameter.clone()))
             .collect()
