@@ -1,3 +1,5 @@
+use std::result;
+
 use crate::{
     errors::err_to_napi,
     types::{
@@ -12,6 +14,7 @@ use napi::{
 };
 use scylla::{
     cluster::metadata::{CollectionType, NativeType},
+    deserialize::row::DeserializeRow,
     errors::IntoRowsResultError,
     frame::response::result::ColumnType,
     response::query_result::{QueryResult, QueryRowsResult},
@@ -65,6 +68,40 @@ pub struct MetaColumnWrapper {
     pub name: String,
 }
 
+pub struct RawRows {
+    cols: Vec<Option<Buffer>>,
+}
+
+impl DeserializeRow<'_, '_> for RawRows {
+    fn type_check(
+        _: &[scylla::frame::response::result::ColumnSpec],
+    ) -> std::result::Result<(), scylla::errors::TypeCheckError> {
+        Ok(())
+    }
+
+    fn deserialize(
+        row: scylla::deserialize::row::ColumnIterator<'_, '_>,
+    ) -> std::result::Result<Self, scylla::errors::DeserializationError> {
+        Ok(RawRows { cols: row
+            .map(|e| e.map(|v| v.slice.map(|s| Buffer::from(s.as_slice()))))
+            .collect::<result::Result<Vec<Option<Buffer>>, scylla::errors::DeserializationError>>(
+            )? })
+    }
+}
+
+impl ToNapiValue for RawRows {
+    /// # Safety
+    ///
+    /// Valid pointer to napi env must be provided
+    unsafe fn to_napi_value(
+        env: napi::sys::napi_env,
+        val: Self,
+    ) -> napi::Result<napi::sys::napi_value> {
+        // Caller of this function ensures a valid pointer to napi env is provided
+        unsafe { Vec::to_napi_value(env, val.cols) }
+    }
+}
+
 #[napi]
 impl QueryResultWrapper {
     /// Converts rust query result into query result wrapper that can be passed to NAPI-RS
@@ -81,7 +118,7 @@ impl QueryResultWrapper {
 
     /// Extracts all the rows of the result into a vector of rows
     #[napi]
-    pub fn get_rows(&self) -> napi::Result<Option<Vec<RowWrapper>>> {
+    pub fn get_rows(&self) -> napi::Result<Option<Vec<RawRows>>> {
         let result = match &self.inner {
             QueryResultVariant::RowsResult(v) => v,
             QueryResultVariant::EmptyResult(_) => {
@@ -89,15 +126,12 @@ impl QueryResultWrapper {
             }
         };
 
-        let rows = result.rows::<Row>()
+        let rows = result.rows::<RawRows>()
             .expect("Type check against the Row type has failed; this is a bug in the underlying Rust driver");
 
         Ok(Some(
-            rows.map(|f| {
-                f.map(|v| RowWrapper { inner: v.columns })
-                    .map_err(err_to_napi)
-            })
-            .collect::<Result<Vec<_>, _>>()?,
+            rows.map(|f| f.map_err(err_to_napi))
+                .collect::<Result<Vec<_>, _>>()?,
         ))
     }
 
