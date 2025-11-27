@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use napi::threadsafe_function::ThreadsafeFunction;
 use openssl::ssl::{SslContextBuilder, SslMethod, SslVerifyMode};
 use scylla::client::SelfIdentity;
 use scylla::client::caching_session::CachingSession;
 use scylla::client::session_builder::SessionBuilder;
-use scylla::response::PagingState;
+use scylla::response::query_result::QueryResult;
+use scylla::response::{PagingState, PagingStateResponse};
 use scylla::statement::batch::Batch;
 use scylla::statement::{Consistency, SerialConsistency, Statement};
 
@@ -47,7 +49,69 @@ pub struct BatchWrapper {
 
 #[napi]
 pub struct SessionWrapper {
-    pub(crate) inner: CachingSession,
+    pub(crate) inner: Arc<CachingSession>,
+}
+
+#[napi]
+pub struct QueryExecuter {
+    params: Arc<Vec<EncodedValuesWrapper>>,
+    statement: Arc<Statement>,
+    session: Arc<CachingSession>,
+    is_prepared: bool,
+}
+
+impl QueryExecuter {
+    fn new(
+        session: Arc<CachingSession>,
+        statement: Arc<Statement>,
+        params: Arc<Vec<EncodedValuesWrapper>>,
+        is_prepared: bool,
+    ) -> Self {
+        QueryExecuter {
+            session,
+            statement,
+            params,
+            is_prepared,
+        }
+    }
+}
+
+#[napi]
+impl QueryExecuter {
+    #[napi]
+    pub async fn get_next_page(
+        &self,
+        paging_state: Option<&PagingStateWrapper>,
+    ) -> napi::Result<PagingResult> {
+        let paging_state = paging_state
+            .map(|e| e.inner.clone())
+            .unwrap_or(PagingState::start());
+        
+        let s = &self.session;
+        let (result, paging_state_response) = if self.is_prepared {
+            s.execute_single_page(
+                (*self.statement).clone(),
+                (*self.params).clone(),
+                paging_state,
+            )
+            .await
+        } else {
+            s.get_session()
+                .query_single_page(
+                    (*self.statement).clone(),
+                    (*self.params).clone(),
+                    paging_state,
+                )
+                .await
+        }
+        .map_err(err_to_napi)?;
+
+        Ok(PagingResult {
+            result: QueryResultWrapper::from_query(result)?,
+            paging_state: paging_state_response.into(),
+            executer: None,
+        })
+    }
 }
 
 #[napi]
@@ -61,7 +125,9 @@ impl SessionWrapper {
             session,
             options.cache_size.unwrap_or(DEFAULT_CACHE_SIZE) as usize,
         );
-        Ok(SessionWrapper { inner: session })
+        Ok(SessionWrapper {
+            inner: Arc::new(session),
+        })
     }
 
     /// Returns the name of the current keyspace
@@ -173,21 +239,15 @@ impl SessionWrapper {
         paging_state: Option<&PagingStateWrapper>,
     ) -> napi::Result<PagingResult> {
         let statement = Arc::new(apply_statement_options(query.into(), &options.options)?);
-        let paging_state = paging_state
-            .map(|e| e.inner.clone())
-            .unwrap_or(PagingState::start());
 
-        let (result, paging_state_response) = self
-            .inner
-            .get_session()
-            .query_single_page((*statement).clone(), params, paging_state)
-            .await
-            .map_err(err_to_napi)?;
+        let session = self.inner.clone();
+        let params = Arc::new(params);
 
-        Ok(PagingResult {
-            result: QueryResultWrapper::from_query(result)?,
-            paging_state: paging_state_response.into(),
-        })
+        let executor = QueryExecuter::new(session, statement.clone(), params.clone(), false);
+
+        let res = executor.get_next_page(paging_state).await?;
+
+        Ok(res.with_executer(executor))
     }
 
     /// Execute a single page of a prepared statement
@@ -203,21 +263,16 @@ impl SessionWrapper {
         options: &QueryOptionsWrapper,
         paging_state: Option<&PagingStateWrapper>,
     ) -> napi::Result<PagingResult> {
-        let paging_state = paging_state
-            .map(|e| e.inner.clone())
-            .unwrap_or(PagingState::start());
-        let prepared = Arc::new(apply_statement_options(query.into(), &options.options)?);
+        let statement = Arc::new(apply_statement_options(query.into(), &options.options)?);
+
+        let session = self.inner.clone();
         let params = Arc::new(params);
 
-        let (result, paging_state) = self
-            .inner
-            .execute_single_page((*prepared).clone(), (*params).clone(), paging_state)
-            .await
-            .map_err(err_to_napi)?;
-        Ok(PagingResult {
-            result: QueryResultWrapper::from_query(result)?,
-            paging_state: paging_state.into(),
-        })
+        let executor = QueryExecuter::new(session, statement.clone(), params.clone(), true);
+
+        let res = executor.get_next_page(paging_state).await?;
+
+        Ok(res.with_executer(executor))
     }
 }
 
