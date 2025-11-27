@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use openssl::ssl::{SslContextBuilder, SslMethod, SslVerifyMode};
 use scylla::client::SelfIdentity;
 use scylla::client::caching_session::CachingSession;
@@ -170,7 +172,7 @@ impl SessionWrapper {
         options: &QueryOptionsWrapper,
         paging_state: Option<&PagingStateWrapper>,
     ) -> napi::Result<PagingResult> {
-        let statement: Statement = apply_statement_options(query.into(), &options.options)?;
+        let statement = Arc::new(apply_statement_options(query.into(), &options.options)?);
         let paging_state = paging_state
             .map(|e| e.inner.clone())
             .unwrap_or(PagingState::start());
@@ -178,7 +180,7 @@ impl SessionWrapper {
         let (result, paging_state_response) = self
             .inner
             .get_session()
-            .query_single_page(statement, params, paging_state)
+            .query_single_page((*statement).clone(), params, paging_state)
             .await
             .map_err(err_to_napi)?;
 
@@ -204,11 +206,12 @@ impl SessionWrapper {
         let paging_state = paging_state
             .map(|e| e.inner.clone())
             .unwrap_or(PagingState::start());
-        let prepared = apply_statement_options(query.into(), &options.options)?;
+        let prepared = Arc::new(apply_statement_options(query.into(), &options.options)?);
+        let params = Arc::new(params);
 
         let (result, paging_state) = self
             .inner
-            .execute_single_page(prepared, params, paging_state)
+            .execute_single_page((*prepared).clone(), (*params).clone(), paging_state)
             .await
             .map_err(err_to_napi)?;
         Ok(PagingResult {
