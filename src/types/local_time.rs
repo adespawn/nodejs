@@ -1,6 +1,7 @@
-use crate::utils::{bigint_to_i64, js_error};
+use crate::errors::js_error;
+use crate::utils::{CharCounter, bigint_to_i64};
 use napi::bindgen_prelude::BigInt;
-use scylla::frame::value::CqlTime;
+use scylla::value::CqlTime;
 use std::fmt::{self, Write};
 use std::num::ParseIntError;
 
@@ -12,7 +13,7 @@ const NANO_SEC_IN_MILLIS: i64 = 1_000_000;
 
 #[napi]
 pub struct LocalTimeWrapper {
-    pub value: BigInt,
+    pub(crate) value: BigInt,
     pub hour: i64,
     pub minute: i64,
     pub second: i64,
@@ -40,6 +41,11 @@ impl LocalTimeWrapper {
             nanosecond,
             ns_value,
         }
+    }
+
+    #[napi]
+    pub fn get_value(&self) -> BigInt {
+        self.value.clone()
     }
 
     #[napi]
@@ -118,30 +124,9 @@ impl fmt::Display for LocalTimeWrapper {
             for _ in 0..(9 - zeros.count()) {
                 write!(f, "0")?;
             }
-            write!(f, "{}", nanos)?;
+            write!(f, "{nanos}")?;
         }
 
-        Ok(())
-    }
-}
-
-struct CharCounter {
-    count: usize,
-}
-
-impl CharCounter {
-    fn new() -> Self {
-        CharCounter { count: 0 }
-    }
-
-    fn count(self) -> usize {
-        self.count
-    }
-}
-
-impl fmt::Write for CharCounter {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.count = s.len();
         Ok(())
     }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 "use strict";
 const assert = require("assert");
 const util = require("util");
@@ -37,26 +38,39 @@ describe("Client @SERVER_API", function () {
             });
         });
 
-        // Would require correct error throwing
+        // Would require error throwing refactor
         // TODO: Fix this test
-        /* it("should callback with syntax error", function (done) {
+        it("should callback with syntax error", function (done) {
             const client = setupInfo.client;
             client.connect(function (err) {
                 assert.ifError(err);
                 const query = "SELECT WILL FAIL";
                 client.execute(query, function (err, result) {
                     assert.ok(err);
-                    assert.strictEqual(
-                        err.code,
-                        types.responseErrorCodes.syntaxError,
-                    );
-                    assert.strictEqual(err.query, query);
+                    assert.ok(err instanceof Error);
+                    assert.ok(err.message.includes("syntax error"));
+                    // assert.strictEqual(
+                    //     err.code,
+                    //     types.responseErrorCodes.syntaxError,
+                    // );
+                    // assert.strictEqual(err.query, query);
                     assert.equal(result, null);
                     done();
                 });
             });
-        }); */
+        });
 
+        it("should retrieve keyspace name", function (done) {
+            const client = setupInfo.client;
+            client.connect(function (err) {
+                assert.ifError(err);
+                assert.equal(client.keyspace, setupInfo.keyspace);
+                done();
+            });
+        });
+
+        // Would require error throwing refactor
+        // TODO: Fix this test
         context("with incorrect query parameters", () => {
             const client = setupInfo.client;
             const query = `INSERT INTO ${table} (id, bigint_sample) VALUES (?, ?)`;
@@ -70,20 +84,26 @@ describe("Client @SERVER_API", function () {
                     ],
                     (params, next) =>
                         client.execute(query, params, (err) => {
-                            helper.assertInstanceOf(err, errors.ResponseError);
+                            helper.assertInstanceOf(err, Error);
+                            assert.ok(
+                                err.message.includes(
+                                    "Failed to serialize query parameters",
+                                ),
+                            );
+                            /* helper.assertInstanceOf(err, errors.ResponseError);
                             assert.strictEqual(
                                 err.code,
                                 types.responseErrorCodes.invalid,
-                            );
+                            ); */
                             next();
                         }),
                     done,
                 );
             });
 
-            // Would require correct error throwing
+            // Would require error throwing refactor
             // TODO: Fix this test
-            /* it("should callback with error when the parameter types do not match", (done) => {
+            it("should callback with error when the parameter types do not match", (done) => {
                 utils.eachSeries(
                     [
                         [types.Uuid.random(), "a"],
@@ -91,17 +111,25 @@ describe("Client @SERVER_API", function () {
                     ],
                     (params, next) =>
                         client.execute(query, params, (err) => {
-                            helper.assertInstanceOf(err, errors.ResponseError);
+                            // Would require error throwing refactor
+                            // TODO: fix this test
+                            helper.assertInstanceOf(err, Error);
+                            assert.ok(
+                                err.message.includes(
+                                    "Database returned an error",
+                                ),
+                            );
+                            /* helper.assertInstanceOf(err, errors.ResponseError);
                             assert.strictEqual(
                                 err.code,
                                 types.responseErrorCodes.invalid,
-                            );
+                            ); */
                             next();
                         }),
                     done,
                 );
             });
-            
+
             it("should callback with error when parameters can not be encoded", (done) => {
                 utils.eachSeries(
                     [
@@ -115,7 +143,7 @@ describe("Client @SERVER_API", function () {
                         }),
                     done,
                 );
-            }); */
+            });
         });
 
         it("should callback with an empty Array instance as rows when not found", function (done) {
@@ -133,7 +161,7 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        // No support for treating empty buffers as values
+        // Would require #191
         // TODO: Fix this test
         /* it("should support retrieving empty buffers as values", () => {
             // Include some columns to make sure the behaviour is consistent across different types.
@@ -185,8 +213,7 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        // No support for profiles
-        /* it("should fail if non-existent profile provided", function (done) {
+        it("should fail if non-existent profile provided", function (done) {
             const client = newInstance();
             utils.series(
                 [
@@ -209,11 +236,9 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
-        // No support for custom Row (#117)
-        // TODO: Fix this test
-        /* vit("2.0", "should guess known types", function (done) {
+        vit("2.0", "should guess known types", function (done) {
             const client = setupInfo.client;
             const columns =
                 "id, timeuuid_sample, text_sample, double_sample, timestamp_sample, blob_sample, list_sample";
@@ -229,11 +254,9 @@ describe("Client @SERVER_API", function () {
             ];
             // no hint
             insertSelectTest(client, table, columns, values, null, done);
-        }); */
+        });
 
-        // No support for parameter hints
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.0",
             "should use parameter hints as number for simple types",
             function (done) {
@@ -254,7 +277,7 @@ describe("Client @SERVER_API", function () {
                 ];
                 insertSelectTest(client, table, columns, values, hints, done);
             },
-        ); 
+        );
         vit(
             "2.0",
             "should use parameter hints as string for simple types",
@@ -265,7 +288,8 @@ describe("Client @SERVER_API", function () {
                 const client = setupInfo.client;
                 insertSelectTest(client, table, columns, values, hints, done);
             },
-        ); 
+        );
+
         vit(
             "2.0",
             "should use parameter hints as string for complex types partial",
@@ -281,7 +305,7 @@ describe("Client @SERVER_API", function () {
                 const client = setupInfo.client;
                 insertSelectTest(client, table, columns, values, hints, done);
             },
-        ); 
+        );
         vit(
             "2.0",
             "should use parameter hints as string for complex types complete",
@@ -303,8 +327,10 @@ describe("Client @SERVER_API", function () {
                 const client = setupInfo.client;
                 insertSelectTest(client, table, columns, values, hints, done);
             },
-        ); 
-        vit(
+        );
+        // No support for map polyfills
+        // TODO: Fix this test
+        /* vit(
             "2.0",
             "should use parameter hints for custom map polyfills",
             function (done) {
@@ -320,9 +346,7 @@ describe("Client @SERVER_API", function () {
             },
         ); */
 
-        // No support for auto paging
-        // TODO: Fix this test
-        /* vit("2.0", "should not autoPage", function (done) {
+        vit("2.0", "should not autoPage", function (done) {
             const client = setupInfo.client;
             utils.series(
                 [
@@ -362,11 +386,9 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
-        // No support for fetchSize and autoPage
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.0",
             "should return ResultSet compatible with @@iterator",
             function (done) {
@@ -436,13 +458,11 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             },
-        ); */
+        );
 
-        // No support for hint
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.0",
-            "should callback in err when wrong hints are provided",
+            "should callback with error when wrong hints are provided",
             function (done) {
                 const client = setupInfo.client;
                 const query = util.format(
@@ -487,9 +507,16 @@ describe("Client @SERVER_API", function () {
                                 { hints: [[]] },
                                 function (err) {
                                     helper.assertInstanceOf(err, Error);
-                                    helper.assertNotInstanceOf(
+                                    // Would require error throwing refactor
+                                    // TODO: Fix this test
+                                    /* helper.assertNotInstanceOf(
                                         err,
                                         errors.NoHostAvailableError,
+                                    ); */
+                                    assert.ok(
+                                        err.message.includes(
+                                            "Type information not valid",
+                                        ),
                                     );
                                     next();
                                 },
@@ -502,9 +529,16 @@ describe("Client @SERVER_API", function () {
                                 { hints: ["zzz", "mmmm"] },
                                 function (err) {
                                     helper.assertInstanceOf(err, Error);
-                                    helper.assertNotInstanceOf(
+                                    // Would require error throwing refactor
+                                    // TODO: Fix this test
+                                    /* helper.assertNotInstanceOf(
                                         err,
                                         errors.NoHostAvailableError,
+                                    ); */
+                                    assert.ok(
+                                        err.message.includes(
+                                            "Data type with name zzz not valid",
+                                        ),
                                     );
                                     next();
                                 },
@@ -514,7 +548,7 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             },
-        ); */
+        );
 
         vit("2.1", "should encode CONTAINS parameter", function (done) {
             const client = setupInfo.client;
@@ -542,10 +576,7 @@ describe("Client @SERVER_API", function () {
                 },
             );
         });
-
-        // No support for consistency
-        // TODO: Fix this test
-        /* it("should accept localOne and localQuorum consistencies", function (done) {
+        it("should accept localOne and localQuorum consistencies", function (done) {
             const client = setupInfo.client;
             utils.series(
                 [
@@ -568,9 +599,9 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
-        // No support for consistency
+        // No support for result.info.achievedConsistency field
         // TODO: Fix this test
         /* it("should use consistency level from profile and override profile when provided in query options", function (done) {
             const client = newInstance({
@@ -628,10 +659,7 @@ describe("Client @SERVER_API", function () {
                 [
                     client.connect.bind(client),
                     function insert(next) {
-                        const query = util.format(
-                            "INSERT INTO %s (id, text_sample, double_sample) VALUES (?, ?, ?)",
-                            table,
-                        );
+                        const query = `INSERT INTO ${table} (id, text_sample, double_sample) VALUES (?, ?, ?)`;
                         client.execute(
                             query,
                             [id, "sample unset", types.unset],
@@ -639,10 +667,7 @@ describe("Client @SERVER_API", function () {
                         );
                     },
                     function select(next) {
-                        const query = util.format(
-                            "SELECT id, text_sample, double_sample FROM %s WHERE id = ?",
-                            table,
-                        );
+                        const query = `SELECT id, text_sample, double_sample FROM ${table} WHERE id = ?`;
                         client.execute(query, [id], function (err, result) {
                             assert.ifError(err);
                             assert.strictEqual(result.rowLength, 1);
@@ -652,6 +677,45 @@ describe("Client @SERVER_API", function () {
                                 "sample unset",
                             );
                             assert.strictEqual(row["double_sample"], null);
+                            next();
+                        });
+                    },
+                ],
+                done,
+            );
+        });
+
+        vit("2.2", "unset should not override the value", function (done) {
+            const client = setupInfo.client;
+            const id = types.Uuid.random();
+            utils.series(
+                [
+                    client.connect.bind(client),
+                    function insert(next) {
+                        const query = `INSERT INTO ${table} (id, text_sample, double_sample) VALUES (?, ?, ?)`;
+                        client.execute(
+                            query,
+                            [id, "sample unset", types.unset],
+                            next,
+                        );
+                    },
+                    // TODO: Test also undefined values, when support for encodingOptions.useUndefinedAsUnset option is implemented.
+                    function update(next) {
+                        const query = `UPDATE ${table} SET "text_sample" = ?, double_sample = ? WHERE id = ?`;
+                        client.execute(query, [types.unset, 2.0, id], next);
+                    },
+                    function select(next) {
+                        const query = `SELECT id, text_sample, double_sample FROM ${table} WHERE id = ?`;
+
+                        client.execute(query, [id], function (err, result) {
+                            assert.ifError(err);
+                            assert.strictEqual(result.rowLength, 1);
+                            const row = result.first();
+                            assert.strictEqual(
+                                row["text_sample"],
+                                "sample unset",
+                            );
+                            assert.strictEqual(row["double_sample"], 2.0);
                             next();
                         });
                     },
@@ -698,9 +762,7 @@ describe("Client @SERVER_API", function () {
             );
         }); */
 
-        // No support for used types
-        // TODO: Fix this test
-        /* it("should return the column definitions", function (done) {
+        it("should return the column definitions", function (done) {
             const client = setupInfo.client;
             // insert at least 1 row
             const insertQuery = util.format(
@@ -740,21 +802,23 @@ describe("Client @SERVER_API", function () {
                                 result.columns[4].type.code,
                                 types.dataTypes.list,
                             );
-                            assert.ok(result.columns[4].type.info);
+                            // TODO: Would require #245
+                            /* assert.ok(result.columns[4].type.info);
                             assert.strictEqual(
                                 result.columns[4].type.info.code,
                                 types.dataTypes.int,
-                            );
+                            ); */
                             assert.strictEqual(
                                 result.columns[5].type.code,
                                 types.dataTypes.map,
                             );
-                            assert.ok(
+                            // TODO: Would require #245
+                            /* assert.ok(
                                 result.columns[5].type.info[0].code ===
-                                    types.dataTypes.text ||
-                                    result.columns[5].type.info[0].code ===
-                                        types.dataTypes.varchar,
-                            );
+                                types.dataTypes.text ||
+                                result.columns[5].type.info[0].code ===
+                                types.dataTypes.varchar,
+                            ); */
                             next();
                         });
                     },
@@ -773,11 +837,9 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
-        // No support for used types
-        // TODO: Fix this test
-        /* it("should return rows that are serializable to json", function (done) {
+        it("should return rows that are serializable to json", function (done) {
             const client = setupInfo.client;
             const id = types.Uuid.random();
             const timeId = types.TimeUuid.now();
@@ -821,11 +883,9 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
-        // No support for consistency levels
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.0",
             "should use serial consistency level from profile and override profile when provided in query options",
             function (done) {
@@ -853,7 +913,9 @@ describe("Client @SERVER_API", function () {
                                 function (err) {
                                     // expect an error as we used an invalid serial CL.
                                     assert.ok(err);
-                                    assert.strictEqual(err.code, 0x2200); // should be an invalid query.
+                                    // TODO: Would require error throwing refactor
+                                    helper.assertInstanceOf(err, Error);
+                                    // assert.strictEqual(err.code, 0x2200); // should be an invalid query.
                                     next();
                                 },
                             );
@@ -893,11 +955,9 @@ describe("Client @SERVER_API", function () {
                     helper.finish(client, done),
                 );
             },
-        ); */
+        );
 
-        // No support for protocol level timestamp
-        // TODO: Fix this test
-        /* vit("2.1", "should support protocol level timestamp", function (done) {
+        vit("2.1", "should support protocol level timestamp", function (done) {
             const client = setupInfo.client;
             const id = types.Uuid.random();
             const timestamp = types.generateTimestamp(new Date(), 777);
@@ -937,7 +997,7 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
         // No support for queryTrace flag
         // TODO: Fix this test
@@ -1015,9 +1075,7 @@ describe("Client @SERVER_API", function () {
             );
         }); */
 
-        // No support for info field
-        // TODO: Fix this test
-        /* it("should not retrieve trace id by default", function (done) {
+        it("should not retrieve trace id by default", function (done) {
             const client = setupInfo.client;
             client.execute(
                 "SELECT * FROM system.local",
@@ -1028,14 +1086,17 @@ describe("Client @SERVER_API", function () {
                     done();
                 },
             );
-        }); */
+        });
 
-        // No support for info field
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.2",
             "should include the warning in the ResultSet",
             function (done) {
+                // When testing on scylla, those warnings are not returned by the database
+                if (helper.getServerInfo().isScylla) {
+                    done();
+                    return;
+                }
                 const client = setupInfo.client;
                 let loggedMessage = false;
                 client.on("log", function (level, className, message) {
@@ -1066,15 +1127,15 @@ describe("Client @SERVER_API", function () {
                     assert.strictEqual(result.info.warnings.length, 1);
                     helper.assertContains(result.info.warnings[0], "batch");
                     helper.assertContains(result.info.warnings[0], "exceeding");
-                    assert.ok(loggedMessage);
+                    // TODO: Fix this test
+                    // Client does not expose log events.
+                    /* assert.ok(loggedMessage); */
                     done();
                 });
             },
-        ); */
+        );
 
-        // No support for buffer as input to any data type
-        // TODO: Fix this test
-        /* it("should support buffer as input for any data type", () => {
+        it("should support buffer as input for any data type", () => {
             const buffer4 = utils.allocBufferFromArray([0, 0, 0, 1]);
             const buffer8 = utils.allocBuffer(8);
             const buffer16 = types.Uuid.random().getBuffer();
@@ -1130,11 +1191,9 @@ describe("Client @SERVER_API", function () {
                         }),
                 ),
             );
-        }); */
+        });
 
-        // No support for udt and tuples
-        // TODO: Fix this test
-        /* describe("with udt and tuple", function () {
+        describe("with udt and tuple", function () {
             const sampleId = types.Uuid.random();
             const insertQuery =
                 "INSERT INTO tbl_udts (id, phone_col, address_col) VALUES (%s, %s, %s)";
@@ -1179,7 +1238,8 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             });
-            vit("2.1", "should retrieve column information", function (done) {
+            // TODO: Add support for column information retrieval
+            /* vit("2.1", "should retrieve column information", function (done) {
                 const client = setupInfo.client;
                 client.execute(
                     util.format(selectQuery, sampleId),
@@ -1259,7 +1319,7 @@ describe("Client @SERVER_API", function () {
                         done();
                     },
                 );
-            });
+            }); */
             vit("2.1", "should parse udt row", function (done) {
                 const client = setupInfo.client;
                 client.execute(
@@ -1300,7 +1360,8 @@ describe("Client @SERVER_API", function () {
                     },
                 );
             });
-            vit(
+            // TODO: Add type guessing for UDT
+            /* vit(
                 "2.1",
                 "should allow udt parameter hints and retrieve metadata",
                 function (done) {
@@ -1395,7 +1456,7 @@ describe("Client @SERVER_API", function () {
                         done,
                     );
                 },
-            );
+            );*/
             vit("2.1", "should allow tuple parameter hints", function (done) {
                 const client = setupInfo.client;
                 const id = types.Uuid.random();
@@ -1451,6 +1512,47 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             });
+            // First hint is invalid because it contains 4 elements instead of 3
+            // Second hint is invalid because it contains invalid subtype (text instead of int)
+            // TODO: Fix type hints
+            // This test was added by us. Initial encoding verified that we provide more hints than expected,
+            // while the DSx encoder does not. We should probably consider if this should be a valid code with #253
+            [
+                /* "tuple<text, int, blob, int>", */ "tuple<text, text, blob>",
+            ].forEach(function (hint) {
+                vit(
+                    "2.1",
+                    "should throw for improper tuple parameter hints: " + hint,
+                    function (done) {
+                        const client = setupInfo.client;
+                        const id = types.Uuid.random();
+                        const tuple = new types.Tuple(
+                            "Surf Rider",
+                            110,
+                            utils.allocBufferFromString("0f0f", "hex"),
+                        );
+                        utils.series(
+                            [
+                                function insert(next) {
+                                    const query =
+                                        "INSERT INTO tbl_tuples (id, tuple_col) VALUES (?, ?)";
+                                    client.execute(
+                                        query,
+                                        [id, tuple],
+                                        { hints: [null, hint] },
+                                        function (err, result) {
+                                            // TODO: This should probably be a SyntaxError
+                                            helper.assertInstanceOf(err, Error);
+                                            next();
+                                        },
+                                    );
+                                },
+                            ],
+                            done,
+                        );
+                    },
+                );
+            });
             vit("2.2", "should allow insertions as json", function (done) {
                 const client = setupInfo.client;
                 const o = {
@@ -1492,7 +1594,7 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             });
-        }); */
+        });
 
         // No support for named parameters
         // TODO: Fix this test
@@ -1583,8 +1685,8 @@ describe("Client @SERVER_API", function () {
                 },
             );
         }); */
-        // No support for rows length field
-        /* describe("with smallint and tinyint", function () {
+
+        describe("with smallint and tinyint", function () {
             const sampleId = types.Uuid.random();
             const insertQuery =
                 "INSERT INTO tbl_smallints (id, smallint_sample, tinyint_sample, text_sample) VALUES (%s, %s, %s, %s)";
@@ -1673,11 +1775,9 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-        }); */
+        });
 
-        // No support for those types
-        // TODO: Fix this test
-        /* describe("with date and time types", function () {
+        describe("with date and time types", function () {
             const LocalDate = types.LocalDate;
             const LocalTime = types.LocalTime;
             const insertQuery =
@@ -1769,11 +1869,9 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-        }); */
+        });
 
-        // No support for used types
-        // TODO: Fix this test
-        /* describe("with json support", function () {
+        describe("with json support", function () {
             before(function (done) {
                 const client = setupInfo.client;
                 const query =
@@ -1898,7 +1996,9 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-            vit(
+            // No support for used types
+            // TODO: Fix this test
+            /* vit(
                 "2.2",
                 "should allow insert of all non - ECMAScript types as json",
                 function (done) {
@@ -1982,12 +2082,9 @@ describe("Client @SERVER_API", function () {
                         done,
                     );
                 },
-            );
-        }); */
-
-        // No support for consistency
-        // TODO: Fix this test
-        /* describe("with no callback specified", function () {
+            ); */
+        });
+        describe("with no callback specified", function () {
             vit(
                 "2.0",
                 "should return a promise with the result as a value",
@@ -2025,6 +2122,7 @@ describe("Client @SERVER_API", function () {
                         });
                 },
             );
+            // Would require error throwing refactor
             it("should reject the promise when there is a syntax error", function () {
                 const client = setupInfo.client;
                 return client
@@ -2036,11 +2134,15 @@ describe("Client @SERVER_API", function () {
                         throw new Error("should have been rejected");
                     })
                     .catch(function (err) {
-                        helper.assertInstanceOf(err, errors.ResponseError);
+                        assert.ok(
+                            err.message.includes(
+                                "The submitted query has a syntax error",
+                            ),
+                        );
+                        // helper.assertInstanceOf(err, errors.ResponseError);
                     });
             });
-        }); */
-
+        });
         vdescribe("2.0", "with lightweight transactions", function () {
             const client = setupInfo.client;
             const id = types.Uuid.random();
@@ -2094,19 +2196,12 @@ describe("Client @SERVER_API", function () {
             });
         });
 
-        // No support for required client creation parameters
-        // TODO: Fix this test
-        // numericTests(keyspace, false);
-        // No support for paging
-        // TODO: Fix this test
-        // pagingTests(keyspace, false);
+        numericTests(keyspace, false);
+        pagingTests(keyspace, false);
 
         // No support for keyspace
         // TODO: Fix this test
         /* it("should not use keyspace if set on options for lower protocol versions", function () {
-            if (helper.isDseGreaterThan("6.0")) {
-                return this.skip();
-            }
             const client = setupInfo.client;
             return client
                 .execute("select * from local", null, { keyspace: "system" })
@@ -2197,7 +2292,5 @@ function verifyRow(table, id, fields, values, callback) {
  * @returns {Client}
  */
 function newInstance(options) {
-    return helper.shutdownAfterThisTest(
-        new Client(utils.deepExtend({}, helper.baseOptions, options)),
-    );
+    return new Client(utils.deepExtend({}, helper.baseOptions, options));
 }

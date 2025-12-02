@@ -1,0 +1,8 @@
+[book]
+authors = []
+language = "en"
+src = "src"
+title = "ScyllaDB JavaScript Driver"
+
+[build]
+build-dir = "../public/book"  

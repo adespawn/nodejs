@@ -1,11 +1,10 @@
+use scylla::value::{
+    Counter, CqlDate, CqlDecimal, CqlDuration, CqlTime, CqlTimestamp, CqlTimeuuid, CqlValue,
+    CqlVarint,
+};
 use std::{
     net::{IpAddr, Ipv4Addr},
     str::FromStr,
-};
-
-use scylla::frame::{
-    response::result::CqlValue,
-    value::{Counter, CqlDuration, CqlTime, CqlTimestamp, CqlTimeuuid},
 };
 
 use crate::result::CqlValueWrapper;
@@ -43,6 +42,46 @@ pub fn tests_get_cql_wrapper_blob() -> CqlValueWrapper {
 /// Test function returning sample CqlValueWrapper with Counter type
 pub fn tests_get_cql_wrapper_counter() -> CqlValueWrapper {
     let element = CqlValue::Counter(Counter(i64::MAX));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Decimal type
+pub fn tests_get_cql_wrapper_decimal() -> CqlValueWrapper {
+    let element = CqlValue::Decimal(CqlDecimal::from_signed_be_bytes_slice_and_exponent(
+        &[
+            1, 53, 169, 169, 173, 175, 83, 216, 15, 110, 137, 47, 175, 202, 192, 196, 222, 179, 11,
+            93, 98, 127, 51, 6, 161, 141, 90, 11, 80, 251, 28,
+        ],
+        69,
+    ));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Decimal type with negative sign
+pub fn tests_get_cql_wrapper_decimal_negative() -> CqlValueWrapper {
+    let element = CqlValue::Decimal(CqlDecimal::from_signed_be_bytes_slice_and_exponent(
+        &[246],
+        0,
+    ));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Decimal type with negative exponent
+pub fn tests_get_cql_wrapper_decimal_negative_exponent() -> CqlValueWrapper {
+    let element = CqlValue::Decimal(CqlDecimal::from_signed_be_bytes_slice_and_exponent(
+        &[69],
+        -10,
+    ));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with CqlTime type
+pub fn tests_get_cql_wrapper_date() -> CqlValueWrapper {
+    let element = CqlValue::Date(CqlDate((1 << 31) + 7));
     CqlValueWrapper { inner: element }
 }
 
@@ -101,7 +140,11 @@ pub fn tests_get_cql_wrapper_list() -> CqlValueWrapper {
             days: 5,
             nanoseconds: 4,
         }),
-        CqlValue::Boolean(false),
+        CqlValue::Duration(CqlDuration {
+            months: 3,
+            days: 2,
+            nanoseconds: 1,
+        }),
     ]);
     CqlValueWrapper { inner: element }
 }
@@ -111,8 +154,26 @@ pub fn tests_get_cql_wrapper_list() -> CqlValueWrapper {
 pub fn tests_get_cql_wrapper_set() -> CqlValueWrapper {
     let element = CqlValue::Set(vec![
         CqlValue::Text("some text".to_owned()),
-        CqlValue::Int(1),
+        CqlValue::Text("other text".to_owned()),
     ]);
+    CqlValueWrapper { inner: element }
+}
+
+/// Test function returning sample CqlValueWrapper with UserDefinedType type.
+#[napi]
+pub fn tests_get_cql_wrapper_udt() -> CqlValueWrapper {
+    let element = CqlValue::UserDefinedType {
+        keyspace: String::from("keyspace"),
+        name: String::from("name"),
+        fields: vec![
+            (
+                String::from("field1"),
+                Some(CqlValue::Text("some text".to_owned())),
+            ),
+            (String::from("field2"), Some(CqlValue::Int(1))),
+            (String::from("field3"), None),
+        ],
+    };
     CqlValueWrapper { inner: element }
 }
 
@@ -137,6 +198,17 @@ pub fn tests_get_cql_wrapper_small_int() -> CqlValueWrapper {
 /// Test function returning sample CqlValueWrapper with TinyInt type
 pub fn tests_get_cql_wrapper_tiny_int() -> CqlValueWrapper {
     let element = CqlValue::TinyInt(3);
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Tuple type
+pub fn tests_get_cql_wrapper_tuple() -> CqlValueWrapper {
+    let element = CqlValue::Tuple(vec![
+        Some(CqlValue::Text("some text".to_owned())),
+        Some(CqlValue::Int(1)),
+        None,
+    ]);
     CqlValueWrapper { inner: element }
 }
 
@@ -166,5 +238,23 @@ pub fn tests_get_cql_wrapper_time() -> CqlValueWrapper {
 /// Test function returning sample CqlValueWrapper with Inet type
 pub fn tests_get_cql_wrapper_inet() -> CqlValueWrapper {
     let element = CqlValue::Inet(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Varint type
+pub fn tests_get_cql_wrapper_varint() -> CqlValueWrapper {
+    let element = CqlValue::Varint(CqlVarint::from_signed_bytes_be_slice(&[
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+    ]));
+    CqlValueWrapper { inner: element }
+}
+
+#[napi]
+/// Test function returning sample CqlValueWrapper with Varint type
+pub fn tests_get_cql_wrapper_negative_varint() -> CqlValueWrapper {
+    let element = CqlValue::Varint(CqlVarint::from_signed_bytes_be_slice(&[
+        128, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+    ]));
     CqlValueWrapper { inner: element }
 }

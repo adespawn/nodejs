@@ -1,7 +1,6 @@
 "use strict";
 
 const { assert } = require("chai");
-const sinon = require("sinon");
 const util = require("util");
 const path = require("path");
 const policies = require("../lib/policies");
@@ -12,21 +11,11 @@ const childProcessExec = require("child_process").exec;
 const http = require("http");
 const temp = require("temp").track(true);
 const Client = require("../lib/client");
-const defaultOptions = require("../lib/client-options").defaultOptions;
-const { Host, HostMap } = require("../lib/host");
-const OperationState = require("../lib/operation-state");
+const { HostMap } = require("../lib/host");
 const promiseUtils = require("../lib/promise-utils");
+const Vector = types.Vector;
 
 util.inherits(RetryMultipleTimes, policies.retry.RetryPolicy);
-
-const cassandraVersionByDse = {
-    4.8: "2.1",
-    "5.0": "3.0",
-    5.1: "3.11",
-    "6.0": "3.11",
-    6.7: "3.11",
-    6.8: "3.11",
-};
 
 const afterNextHandlers = [];
 let testUnhandledError = null;
@@ -391,17 +380,6 @@ const helper = {
     },
 
     /**
-     * Invokes client.shutdown() after this test finishes.
-     * @param {Client} client
-     * @returns {Client}
-     */
-    shutdownAfterThisTest: function (client) {
-        this.afterThisTest(() => client.shutdown());
-
-        return client;
-    },
-
-    /**
      * Returns a function that waits on schema agreement before executing callback
      * @param {Client} client
      * @param {Function} callback
@@ -412,13 +390,15 @@ const helper = {
             if (err) {
                 return callback(err);
             }
-            if (!client.hosts) {
+            // No support for client.hosts field
+            // TODO: Fix this
+            /* if (!client.hosts) {
                 throw new Error("No hosts on Client");
             }
             if (client.hosts.length === 1) {
                 return callback();
-            }
-            setTimeout(callback, 200 * client.hosts.length);
+            } */
+            setTimeout(callback, 200 /* * client.hosts.length */);
         };
     },
     /**
@@ -445,61 +425,32 @@ const helper = {
 
     /**
      * Gets the Apache Cassandra version.
-     * When the server is DSE, gets the Apache Cassandra equivalent.
+     * When the server is Scylla, gets the Apache Cassandra equivalent.
      */
     getCassandraVersion: function () {
         const serverInfo = this.getServerInfo();
 
-        if (!serverInfo.isDse) {
+        if (!serverInfo.isScylla) {
             return serverInfo.version;
         }
-
-        const dseVersion = serverInfo.version.split(".").slice(0, 2).join(".");
-        return (
-            cassandraVersionByDse[dseVersion] || cassandraVersionByDse["6.7"]
-        );
+        // TODO:
+        // Here we return some arbitrary version, but this does not appear to be used
+        // in any meaningful way. Either fully remove it or implement properly.
+        return "3.11.4";
     },
 
     /**
      * Gets the server version and type.
-     * @return {{version, isDse}}
+     * @return {{version:string, isScylla:boolean}}
      */
     getServerInfo: function () {
+        const isScylla = process.env["CCM_IS_SCYLLA"] === "true";
         return {
-            version: process.env["CCM_VERSION"] || "3.11.4",
-            isDse: process.env["CCM_IS_DSE"] === "true",
+            isScylla: isScylla,
+            version:
+                process.env["CCM_VERSION"] ||
+                (isScylla ? "release:2025.3" : "3.11.4"),
         };
-    },
-
-    getSimulatedCassandraVersion: function () {
-        let version = this.getCassandraVersion();
-        // simulacron does not support protocol V2 and V1, so cap at 2.1.
-        if (version < "2.1") {
-            version = "2.1.19";
-        } else if (version >= "4.0") {
-            // simulacron does not support protocol V5, so cap at 3.11
-            version = "3.11.2";
-        }
-        return version;
-    },
-
-    /**
-     * Determines if the current server is a DSE instance *AND* version is greater than or equals to the version provided
-     * @param {String} version The version in string format, dot separated.
-     * @returns {Boolean}
-     */
-    isDseGreaterThan: function (version) {
-        const serverInfo = this.getServerInfo();
-        if (!serverInfo.isDse) {
-            return false;
-        }
-
-        return helper.versionCompare(serverInfo.version, version);
-    },
-
-    /** Determines if the current server is a DSE instance. */
-    isDse: function () {
-        return this.getServerInfo().isDse;
     },
 
     /**
@@ -653,7 +604,7 @@ const helper = {
 
     /**
      * Version dependent it() method for mocha test case
-     * @param {String} testVersion Minimum version of Cassandra needed for this test
+     * @param {String} testVersion Minimum version of Cassandra/Scylla needed for this test
      * @param {String} testCase Test case name
      * @param {Function} func
      */
@@ -662,13 +613,20 @@ const helper = {
     },
 
     /**
-     * Version dependent describe() method for mocha test case
-     * @param {String} testVersion Minimum version of DSE/Cassandra needed for this test
+     * Version dependent describe() method for mocha test case.
+     * Allows to define one or more versions to run the tests against.
+     * If the runner matches multiple of the provided versions, the tests may be run multiple times.
+     * @param {String|Array<String>} testVersion Minimum version of Cassandra/Scylla needed for this test
      * @param {String} title Title of the describe section.
      * @param {Function} func
      */
     vdescribe: function (testVersion, title, func) {
-        executeIfVersion(testVersion, describe, [title, func]);
+        if (!Array.isArray(testVersion)) {
+            testVersion = [testVersion];
+        }
+        testVersion.forEach((version) =>
+            executeIfVersion(version, describe, [title, func]),
+        );
     },
 
     /**
@@ -923,84 +881,6 @@ const helper = {
         pooling.coreConnectionsPerHost[types.distance.ignored] = 0;
         return pooling;
     },
-    getHostsMock: function (
-        hostsInfo,
-        prepareQueryCb,
-        sendStreamCb,
-        protocolVersion,
-    ) {
-        return hostsInfo.map(function (info, index) {
-            protocolVersion =
-                protocolVersion || types.protocolVersion.maxSupported;
-            const h = new Host(
-                index.toString(),
-                protocolVersion,
-                defaultOptions(),
-                {},
-            );
-            h.isUp = function () {
-                return !(info.isUp === false);
-            };
-            h.checkHealth = utils.noop;
-            h.log = utils.noop;
-            h.shouldBeIgnored = !!info.ignored;
-            h.prepareCalled = 0;
-            h.sendStreamCalled = 0;
-            h.connectionKeyspace = [];
-            h.borrowConnection = function () {
-                if (!h.isUp() || h.shouldBeIgnored) {
-                    throw new Error("This host should not be used");
-                }
-
-                return {
-                    protocolVersion: protocolVersion,
-                    keyspace: "ks",
-                    changeKeyspace: (keyspace) => {
-                        this.keyspace = keyspace;
-                        h.connectionKeyspace.push(keyspace);
-                        return Promise.resolve();
-                    },
-                    prepareOnce: function (q, ks, cb) {
-                        h.prepareCalled++;
-                        if (prepareQueryCb) {
-                            return prepareQueryCb(q, h, cb);
-                        }
-                        cb(null, { id: 1, meta: {} });
-                    },
-                    sendStream: function (r, o, cb) {
-                        h.sendStreamCalled++;
-                        if (sendStreamCb) {
-                            return sendStreamCb(r, h, cb);
-                        }
-                        const op = new OperationState(r, o, cb);
-                        setImmediate(function () {
-                            op.setResult(null, {});
-                        });
-                        return op;
-                    },
-                    prepareOnceAsync: function (q, ks) {
-                        return new Promise((resolve, reject) => {
-                            h.prepareCalled++;
-
-                            if (prepareQueryCb) {
-                                return prepareQueryCb(q, h, (err, result) => {
-                                    if (err) {
-                                        reject(err);
-                                    } else {
-                                        resolve(result);
-                                    }
-                                });
-                            }
-
-                            resolve({ id: 1, meta: {} });
-                        });
-                    },
-                };
-            };
-
-            return sinon.spy(h);
-        });
-    },
     getLoadBalancingPolicyFake: function getLoadBalancingPolicyFake(
         hostsInfo,
         prepareQueryCb,
@@ -1028,20 +908,7 @@ const helper = {
             getDistance: function () {
                 return types.distance.local;
             },
-
-            /**
-             * Shutdowns the hosts and invoke the optional callback.
-             */
-            shutdown: function (cb) {
-                hosts.forEach((h) => h.shutdown(false));
-
-                if (cb) {
-                    cb();
-                }
-            },
         };
-
-        helper.afterThisTest(() => fake.shutdown());
 
         return fake;
     },
@@ -1241,7 +1108,7 @@ helper.ccm.startAll = function (nodeLength, options, callback) {
     const serverInfo = helper.getServerInfo();
 
     helper.trace(
-        `Starting ${serverInfo.isDse ? "DSE" : "Cassandra"} cluster v${serverInfo.version} with ${nodeLength} node(s)`,
+        `Starting ${serverInfo.isScylla ? "Scylla" : "Cassandra"} cluster v${serverInfo.version} with ${nodeLength} node(s)`,
     );
 
     utils.series(
@@ -1257,8 +1124,8 @@ helper.ccm.startAll = function (nodeLength, options, callback) {
                 const clusterName = helper.getRandomName("test");
                 let create = ["create", clusterName];
 
-                if (serverInfo.isDse) {
-                    create.push("--dse");
+                if (serverInfo.isScylla) {
+                    create.push("--scylla");
                 }
 
                 create.push("-v", serverInfo.version);
@@ -1321,7 +1188,10 @@ helper.ccm.startAll = function (nodeLength, options, callback) {
                     start.push("--quiet-windows");
                 }
 
-                if (Array.isArray(options.jvmArgs)) {
+                if (
+                    Array.isArray(options.jvmArgs) &&
+                    !helper.getServerInfo().isScylla
+                ) {
                     options.jvmArgs.forEach(function (arg) {
                         start.push("--jvm_arg", arg);
                     }, this);
@@ -1366,8 +1236,8 @@ helper.ccm.bootstrapNode = function (options, callback) {
         "-b",
     ];
 
-    if (helper.getServerInfo().isDse) {
-        ccmArgs.push("--dse");
+    if (helper.getServerInfo().isScylla) {
+        ccmArgs.push("--scylla");
     }
 
     if (options.dc) {
@@ -1380,10 +1250,6 @@ helper.ccm.bootstrapNode = function (options, callback) {
 helper.ccm.decommissionNode = function (nodeIndex, callback) {
     helper.trace("decommissioning node", nodeIndex);
     const args = ["node" + nodeIndex, "decommission"];
-    // Special case for C* 3.12+, DSE 5.1+, force decommission (see CASSANDRA-12510)
-    if (helper.isDseGreaterThan("5.1")) {
-        args.push("--force");
-    }
     helper.ccm.exec(args, callback);
 };
 
@@ -1637,59 +1503,6 @@ helper.ads.start = function (cb) {
     });
 };
 
-/**
- * Invokes a klist to list the current registered tickets and their expiration if trace is enabled.
- *
- * This is really only useful for debugging.
- *
- * @param {Function} cb Callback to invoke on completion.
- */
-helper.ads.listTickets = function (cb) {
-    this._exec("klist", [], cb);
-};
-
-/**
- * Acquires a ticket for the given username and its principal.
- * @param {String} username Username to acquire ticket for (i.e. cassandra).
- * @param {String} principal Principal to acquire ticket for (i.e. cassandra@DATASTAX.COM).
- * @param {Function} cb Callback to invoke on completion.
- */
-helper.ads.acquireTicket = function (username, principal, cb) {
-    helper.trace("Acquiring ticket");
-    const keytab = this.getKeytabPath(username);
-
-    // Use ktutil on windows, kinit otherwise.
-    const processName = "kinit";
-    const params = ["-t", keytab, "-k", principal];
-    if (process.platform.indexOf("win") === 0) {
-        // Not really sure what to do here yet...
-    }
-
-    this._exec(processName, params, cb);
-};
-
-/**
- * Destroys all tickets for the given principal.
- * @param {String} principal Principal for whom its tickets will be destroyed (i.e. dse/127.0.0.1@DATASTAX.COM).
- * @param {Function} cb Callback to invoke on completion.
- */
-helper.ads.destroyTicket = function (principal, cb) {
-    if (typeof principal === "function") {
-        // noinspection JSValidateTypes
-        cb = principal;
-        principal = null;
-    }
-
-    // Use ktutil on windows, kdestroy otherwise.
-    const processName = "kdestroy";
-    const params = [];
-    if (process.platform.indexOf("win") === 0) {
-        // Not really sure what to do here yet...
-    }
-
-    this._exec(processName, params, cb);
-};
-
 helper.ads._exec = function (processName, params, callback) {
     if (params.length === 0) {
         childProcessExec(processName, callback);
@@ -1756,6 +1569,355 @@ helper.ads.getKeytabPath = function (username) {
 helper.ads.getKrb5ConfigPath = function () {
     return path.join(this.dir, "krb5.conf");
 };
+
+/**
+ * @type {Array<{subtypeString : string, typeInfo: import('../lib/encoder').VectorColumnInfo, value: Array}>}
+ */
+const dataProvider = [
+    {
+        subtypeString: "float",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.float }, 3],
+        },
+        value: [1.1122000217437744, 2.212209939956665, 3.3999900817871094],
+    },
+    {
+        subtypeString: "double",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.double }, 3],
+        },
+        value: [1.1, 2.2, 3.3],
+    },
+    {
+        subtypeString: "varchar",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.text }, 3],
+        },
+        value: ["ab", "b", "cde"],
+    },
+    {
+        subtypeString: "bigint",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.bigint }, 3],
+        },
+        value: [new types.Long(1), new types.Long(2), new types.Long(3)],
+    },
+    {
+        subtypeString: "blob",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.blob }, 3],
+        },
+        value: [
+            Buffer.from([1, 2, 3]),
+            Buffer.from([4, 5, 6]),
+            Buffer.from([7, 8, 9]),
+        ],
+    },
+    {
+        subtypeString: "boolean",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.boolean }, 3],
+        },
+        value: [true, false, true],
+    },
+    {
+        subtypeString: "decimal",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.decimal }, 3],
+        },
+        value: [
+            types.BigDecimal.fromString("1.1"),
+            types.BigDecimal.fromString("2.2"),
+            types.BigDecimal.fromString("3.3"),
+        ],
+    },
+    {
+        subtypeString: "inet",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.inet }, 3],
+        },
+        value: [
+            types.InetAddress.fromString("127.0.0.1"),
+            types.InetAddress.fromString("0.0.0.0"),
+            types.InetAddress.fromString("34.12.10.19"),
+        ],
+    },
+    {
+        subtypeString: "tinyint",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.tinyint }, 3],
+        },
+        value: [1, 2, 3],
+    },
+    {
+        subtypeString: "smallint",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.smallint }, 3],
+        },
+        value: [1, 2, 3],
+    },
+    {
+        subtypeString: "int",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.int }, 3],
+        },
+        value: [-1, 0, -3],
+    },
+    {
+        subtypeString: "duration",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            info: [
+                {
+                    code: types.dataTypes.custom,
+                    info: "org.apache.cassandra.db.marshal.DurationType",
+                },
+                3,
+            ],
+            customTypeName: "vector",
+        },
+        value: [
+            new types.Duration(1, 2, 3),
+            new types.Duration(4, 5, 6),
+            new types.Duration(7, 8, 9),
+        ],
+    },
+    {
+        subtypeString: "date",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.date }, 3],
+        },
+        value: [
+            new types.LocalDate(2020, 1, 1),
+            new types.LocalDate(2020, 2, 1),
+            new types.LocalDate(2020, 3, 1),
+        ],
+    },
+    {
+        subtypeString: "time",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.time }, 3],
+        },
+        value: [
+            new types.LocalTime(types.Long.fromString("6331999999911")),
+            new types.LocalTime(types.Long.fromString("6331999999911")),
+            new types.LocalTime(types.Long.fromString("6331999999911")),
+        ],
+    },
+    {
+        subtypeString: "timestamp",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.timestamp }, 3],
+        },
+        value: [
+            new Date(2020, 1, 1, 1, 1, 1, 1),
+            new Date(2020, 2, 1, 1, 1, 1, 1),
+            new Date(2020, 3, 1, 1, 1, 1, 1),
+        ],
+    },
+    {
+        subtypeString: "uuid",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.uuid }, 3],
+        },
+        value: [types.Uuid.random(), types.Uuid.random(), types.Uuid.random()],
+    },
+    {
+        subtypeString: "timeuuid",
+        typeInfo: {
+            code: types.dataTypes.custom,
+            customTypeName: "vector",
+            info: [{ code: types.dataTypes.timeuuid }, 3],
+        },
+        value: [
+            types.TimeUuid.now(),
+            types.TimeUuid.now(),
+            types.TimeUuid.now(),
+        ],
+    },
+];
+
+helper.dataProvider = dataProvider;
+
+const dataProviderWithCollections = dataProvider
+    .flatMap((data) => [
+        data,
+        // vector<list<subtype>, 3>
+        {
+            subtypeString: "list<" + data.subtypeString + ">",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.list,
+                        info: {
+                            code: data.typeInfo.info[0].code,
+                            info: data.typeInfo.info[0]["info"],
+                        },
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: data.value.map((value) => [value, value, value]),
+        },
+        // TODO: Fails due to https://github.com/scylladb/scylladb/issues/26704
+        // Fix, once the change is ported to ccm.
+        /* // vector<map<int, subtype>, 3>
+        {
+            subtypeString: "map<int, " + data.subtypeString + ">",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.map,
+                        info: [
+                            { code: types.dataTypes.int },
+                            {
+                                code: data.typeInfo.info[0].code,
+                                info: data.typeInfo.info[0]["info"],
+                            },
+                        ],
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: data.value.map((value) => ({
+                1: value,
+                2: value,
+                3: value,
+            })),
+        },
+        // vector<set<subtype>, 3>
+        {
+            subtypeString: "set<" + data.subtypeString + ">",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.set,
+                        info: {
+                            code: data.typeInfo.info[0].code,
+                            info: data.typeInfo.info[0]["info"],
+                        },
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: data.value.map((value) => [value, value, value]),
+        }, */
+        // vector<tuple<subtype, subtype>, 3>
+        {
+            subtypeString:
+                "tuple<" + data.subtypeString + ", " + data.subtypeString + ">",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.tuple,
+                        info: [
+                            {
+                                code: data.typeInfo.info[0].code,
+                                info: data.typeInfo.info[0]["info"],
+                            },
+                            {
+                                code: data.typeInfo.info[0].code,
+                                info: data.typeInfo.info[0]["info"],
+                            },
+                        ],
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: data.value.map((value) => new types.Tuple(value, value)),
+        },
+        // vector<vector<subtype, 3>, 3>
+        {
+            subtypeString: "vector<" + data.subtypeString + ", 3>",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.custom,
+                        info: [
+                            {
+                                code: data.typeInfo.info[0].code,
+                                info: data.typeInfo.info[0]["info"],
+                            },
+                            3,
+                        ],
+                        customTypeName: "vector",
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: data.value.map(
+                (value) =>
+                    new Vector([value, value, value], data.subtypeString),
+            ),
+        },
+    ])
+    .concat([
+        // vector<my_udt, 3>
+        {
+            subtypeString: "my_udt",
+            typeInfo: {
+                code: types.dataTypes.custom,
+                info: [
+                    {
+                        code: types.dataTypes.udt,
+                        info: {
+                            name: "my_udt",
+                            fields: [
+                                {
+                                    name: "f1",
+                                    type: { code: types.dataTypes.text },
+                                },
+                            ],
+                        },
+                    },
+                    3,
+                ],
+                customTypeName: "vector",
+            },
+            value: [{ f1: "a" }, { f1: "b" }, { f1: "c" }],
+        },
+    ]);
+helper.dataProviderWithCollections = dataProviderWithCollections;
 
 /**
  * A retry policy for testing purposes only, retries for a number of times
@@ -1840,29 +2002,27 @@ FallthroughRetryPolicy.prototype.onRequestError =
 
 /**
  * Conditionally executes func if testVersion is <= the current cassandra version.
- * @param {String} testVersion Minimum version of Cassandra needed.
+ * @param {String} testVersion Minimum version of Cassandra/Scylla needed.
  * @param {Function} func The function to conditionally execute.
  * @param {Array} args the arguments to apply to the function.
  */
 function executeIfVersion(testVersion, func, args) {
-    const serverInfo = helper.getServerInfo();
-    let invokeFunction = false;
-
     if (testVersion.startsWith("dse-")) {
-        if (serverInfo.isDse) {
-            // Compare only if the server instance is DSE
-            invokeFunction = helper.versionCompare(
-                serverInfo.version,
-                testVersion.substr(4),
-            );
-        }
-    } else {
-        // Use the C* version (of DSE or the actual C* version)
-        invokeFunction = helper.versionCompare(
-            helper.getCassandraVersion(),
-            testVersion,
-        );
+        throw new Error("No support for DSE");
     }
+
+    // TODO: For now we do not allow to filter for specific Scylla versions
+    if (testVersion === "scylla") {
+        if (helper.getServerInfo().isScylla) {
+            func.apply(this, args);
+        }
+        return;
+    }
+
+    let invokeFunction = helper.versionCompare(
+        helper.getCassandraVersion(),
+        testVersion,
+    );
 
     if (invokeFunction) {
         func.apply(this, args);
@@ -1876,16 +2036,11 @@ class OrderedLoadBalancingPolicy extends policies.loadBalancing
     .RoundRobinPolicy {
     /**
      * Creates a new instance.
-     * @param {Array<String>|SimulacronCluster} [addresses] When specified, it uses the order from the provided host
+     * @param {Array<String>} [addresses] When specified, it uses the order from the provided host
      * addresses.
      */
     constructor(addresses) {
         super();
-
-        if (addresses && typeof addresses.dc === "function") {
-            // With Simulacron, use the nodes from the first DC in that order
-            addresses = addresses.dc(0).nodes.map((n) => n.address);
-        }
 
         this.addresses = addresses;
     }

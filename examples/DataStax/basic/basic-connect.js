@@ -1,5 +1,5 @@
 "use strict";
-const cassandra = require("scylladb-javascript-driver");
+const cassandra = require("scylladb-nodejs-rs-driver");
 const { getClientArgs } = require("../util");
 
 const client = new cassandra.Client(getClientArgs());
@@ -11,13 +11,11 @@ client
             client.hosts.length,
             client.hosts.keys(),
         );
-        console.log("Keyspaces: %j", Object.keys(client.metadata.keyspaces));
-        console.log("Shutting down");
-        return client.shutdown();
+        // Currently the driver does not support that metadata field.
+        // console.log("Keyspaces: %j", Object.keys(client.metadata.keyspaces));
+        console.log("Connected to cluster.");
+        return;
     })
     .catch(function (err) {
         console.error("There was an error when connecting", err);
-        return client.shutdown().then(() => {
-            throw err;
-        });
     });

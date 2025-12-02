@@ -166,7 +166,13 @@ describe("Client @SERVER_API", function () {
                 const client = newInstance();
                 client.batch(["INSERT WILL FAIL"], function (err) {
                     assert.ok(err);
-                    // Would require correct error throwing
+                    assert.ok(
+                        err.message.includes(
+                            "Preparation failed on every connection from the selected pool.",
+                        ),
+                    );
+                    assert.ok(err.message.includes("syntax error"));
+                    // Would require error throwing refactor
                     // TODO: fix this test
                     /* assert.ok(err instanceof errors.ResponseError); */
                     done();
@@ -211,9 +217,8 @@ describe("Client @SERVER_API", function () {
                         );
                     })
                     .catch(function (err) {
-                        // should be an Argument Error
                         assert.ok(err);
-                        // Would require correct error throwing
+                        // Would require error throwing refactor
                         // TODO: Fix this test
                         /* if (
                             !(err instanceof errors.ArgumentError) &&
@@ -224,6 +229,19 @@ describe("Client @SERVER_API", function () {
                                     method.toString(),
                             );
                         } */
+                        if (
+                            !(err instanceof errors.ArgumentError) &&
+                            // TODO: This should be ResponseError.
+                            // For now we just check the message to make sure it's the proper error
+                            !err.message.includes(
+                                "Preparation failed on every connection from the selected pool.",
+                            )
+                        ) {
+                            throw new Error(
+                                "Expected ArgumentError or ResponseError for method " +
+                                    method.toString(),
+                            );
+                        }
                     });
             });
             setImmediate(client.shutdown.bind(client));
@@ -266,9 +284,7 @@ describe("Client @SERVER_API", function () {
                 done,
             );
         });
-        // Currently no support for hints
-        // TODO: Fix this test
-        /* vit("2.0", "should use hints when provided", function (done) {
+        vit("2.0", "should use hints when provided", function (done) {
             const client = newInstance();
             const id1 = types.Uuid.random();
             const id2 = types.Uuid.random();
@@ -319,10 +335,9 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-        }); */
-        // Currently no support for hints
-        // TODO: Fix this test
-        /* vit(
+        });
+
+        vit(
             "2.0",
             "should callback in err when wrong hints are provided",
             function (done) {
@@ -344,7 +359,7 @@ describe("Client @SERVER_API", function () {
                                 queries,
                                 { hints: {} },
                                 function (err) {
-                                    //it should not fail, dismissed
+                                    // it should not fail, dismissed
                                     next(err);
                                 },
                             );
@@ -354,7 +369,7 @@ describe("Client @SERVER_API", function () {
                                 queries,
                                 { hints: [["uuid"]] },
                                 function (err) {
-                                    //it should not fail
+                                    // it should not fail
                                     next(err);
                                 },
                             );
@@ -392,10 +407,9 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             },
-        ); */
-        // Currently no support for timestamps
-        // TODO: Fix this test
-        /* vit("2.1", "should support protocol level timestamp", function (done) {
+        );
+
+        vit("2.1", "should support protocol level timestamp", function (done) {
             const insertQuery =
                 "INSERT INTO %s (id, text_sample) VALUES (?, ?)";
             const selectQuery =
@@ -414,61 +428,60 @@ describe("Client @SERVER_API", function () {
                     params: [id2, "value 2 with timestamp"],
                 },
             ];
+            const assert1 = function (next) {
+                client.execute(
+                    util.format(selectQuery, table1, id1),
+                    function (err, result) {
+                        assert.ifError(err);
+                        assert.ok(result);
+                        assert.ok(result.first());
+                        assert.strictEqual(
+                            result.first()["text_sample"],
+                            "value 1 with timestamp",
+                        );
+                        helper.assertInstanceOf(
+                            result.first()["writetime(text_sample)"],
+                            types.Long,
+                        );
+                        assert.strictEqual(
+                            result.first()["writetime(text_sample)"].toString(),
+                            timestamp.toString(),
+                        );
+                        next();
+                    },
+                );
+            };
+            const assert2 = function (next) {
+                client.execute(
+                    util.format(selectQuery, table2, id2),
+                    function (err, result) {
+                        assert.ifError(err);
+                        assert.ok(result);
+                        assert.ok(result.first());
+                        assert.strictEqual(
+                            result.first()["text_sample"],
+                            "value 2 with timestamp",
+                        );
+                        assert.strictEqual(
+                            result.first()["writetime(text_sample)"].toString(),
+                            timestamp.toString(),
+                        );
+                        next();
+                    },
+                );
+            };
             utils.series(
                 [
                     function (next) {
                         client.batch(queries, { timestamp: timestamp }, next);
                     },
-                    function assertValue1(next) {
-                        client.execute(
-                            util.format(selectQuery, table1, id1),
-                            function (err, result) {
-                                assert.ifError(err);
-                                assert.ok(result);
-                                assert.ok(result.first());
-                                assert.strictEqual(
-                                    result.first()["text_sample"],
-                                    "value 1 with timestamp",
-                                );
-                                helper.assertInstanceOf(
-                                    result.first()["writetime(text_sample)"],
-                                    types.Long,
-                                );
-                                assert.strictEqual(
-                                    result
-                                        .first()
-                                    ["writetime(text_sample)"].toString(),
-                                    timestamp.toString(),
-                                );
-                                next();
-                            },
-                        );
-                    },
-                    function assertValue2(next) {
-                        client.execute(
-                            util.format(selectQuery, table2, id2),
-                            function (err, result) {
-                                assert.ifError(err);
-                                assert.ok(result);
-                                assert.ok(result.first());
-                                assert.strictEqual(
-                                    result.first()["text_sample"],
-                                    "value 2 with timestamp",
-                                );
-                                assert.strictEqual(
-                                    result
-                                        .first()
-                                    ["writetime(text_sample)"].toString(),
-                                    timestamp.toString(),
-                                );
-                                next();
-                            },
-                        );
-                    },
+                    (next) => assert1(next),
+                    (next) => assert2(next),
                 ],
                 done,
             );
-        }); */
+        });
+
         vit("2.1", "should support serial consistency", function (done) {
             const insertQuery =
                 "INSERT INTO %s (id, text_sample) VALUES (?, ?)";
@@ -605,9 +618,7 @@ describe("Client @SERVER_API", function () {
             );
         });
         after(helper.ccmHelper.remove);
-        // No support for varint
-        // TODO: Fix this test
-        /* vit("2.0", "should prepare and send the request", function (done) {
+        vit("2.0", "should prepare and send the request", function (done) {
             const client = newInstance();
             const id1 = types.Uuid.random();
             const id2 = types.Uuid.random();
@@ -677,11 +688,8 @@ describe("Client @SERVER_API", function () {
                     );
                 },
             );
-        }); */
-
-        // Would require correct error throwing
-        // TODO: Fix this test
-        /* vit(
+        });
+        vit(
             "2.0",
             "should callback in error when the one of the queries contains syntax error",
             function (done) {
@@ -717,14 +725,17 @@ describe("Client @SERVER_API", function () {
                             queries,
                             { prepare: true },
                             function (err) {
-                                helper.assertInstanceOf(
+                                // Would require error throwing refactor
+                                // TODO: Fix this test
+                                assert.ok(err);
+                                /* helper.assertInstanceOf(
                                     err,
                                     errors.ResponseError,
                                 );
                                 assert.strictEqual(
                                     err.code,
                                     types.responseErrorCodes.syntaxError,
-                                );
+                                ); */
                                 next();
                             },
                         );
@@ -732,7 +743,7 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             },
-        ); */
+        );
         vit(
             "2.0",
             "should callback in error when the type does not match",
@@ -758,10 +769,8 @@ describe("Client @SERVER_API", function () {
                             queries,
                             { prepare: true },
                             function (err) {
-                                // Would require correct error throwing
-                                // TODO: Fix this test
                                 assert.strictEqual(isNativeError(err), true);
-                                /* helper.assertInstanceOf(err, TypeError); */
+                                helper.assertInstanceOf(err, TypeError);
                                 next();
                             },
                         );
@@ -771,9 +780,7 @@ describe("Client @SERVER_API", function () {
             },
         );
 
-        // No support for timestamp
-        // TODO: Fix this test
-        /* vit(
+        vit(
             "2.0",
             "should handle multiple prepares in parallel",
             function (done) {
@@ -782,7 +789,7 @@ describe("Client @SERVER_API", function () {
                 const id1Tbl2 = types.Uuid.random();
                 const id2Tbl1 = types.Uuid.random();
                 const id2Tbl2 = types.Uuid.random();
-                //Avoid using the same queries from test to test, include hardcoded values
+                // Avoid using the same queries from test to test, include hardcoded values
                 const query1Table1 = util.format(
                     "INSERT INTO %s (id, time, decimal_sample, int_sample) VALUES (?, ?, ?, 201)",
                     table1,
@@ -881,7 +888,7 @@ describe("Client @SERVER_API", function () {
                         if (err) {
                             return done(err);
                         }
-                        //verify results in both tables
+                        // verify results in both tables
                         const q = "SELECT * FROM %s where id IN (%s, %s)";
                         utils.series(
                             [
@@ -935,7 +942,7 @@ describe("Client @SERVER_API", function () {
                     },
                 );
             },
-        ); */
+        );
         // No support for named parameters
         // TODO: Fix this test
         /* vit("2.0", "should allow named parameters", function (done) {
@@ -1013,9 +1020,8 @@ describe("Client @SERVER_API", function () {
                 },
             );
         }); */
-        // No support for timestamp
-        // TODO: Fix this test
-        /* vit(
+
+        vit(
             "2.0",
             "should execute batch containing the same query multiple times",
             function (done) {
@@ -1033,7 +1039,7 @@ describe("Client @SERVER_API", function () {
                 ];
                 client.batch(queries, { prepare: true }, function (err) {
                     assert.ifError(err);
-                    //Check values inserted
+                    // Check values inserted
                     const selectQuery = util.format(
                         "SELECT int_sample FROM %s WHERE id = ?",
                         table1,
@@ -1047,13 +1053,10 @@ describe("Client @SERVER_API", function () {
                     });
                 });
             },
-        ); */
-        // Would require correct error throwing
+        );
+        // Would require error throwing refactor
         // TODO: Fix this test
-        /* it("should not use keyspace if set on options for lower protocol versions", function () {
-            if (helper.isDseGreaterThan("6.0")) {
-                return this.skip();
-            }
+        it("should not use keyspace if set on options for lower protocol versions", function () {
             const client = newInstance({});
             const insertQuery =
                 "INSERT INTO %s (id, time, double_sample) VALUES (?, ?, ?)";
@@ -1076,10 +1079,16 @@ describe("Client @SERVER_API", function () {
                     throw new Error("should have failed");
                 })
                 .catch(function (err) {
-                    helper.assertInstanceOf(err, errors.ResponseError);
+                    assert.ok(err);
+                    assert.ok(
+                        err.message.includes(
+                            "Preparation failed on every connection from the selected pool.",
+                        ),
+                    );
+                    // helper.assertInstanceOf(err, errors.ResponseError);
                     return client.shutdown();
                 });
-        }); */
+        });
     });
 });
 
@@ -1087,7 +1096,5 @@ describe("Client @SERVER_API", function () {
  * @returns {Client}
  */
 function newInstance(options) {
-    return helper.shutdownAfterThisTest(
-        new Client(utils.deepExtend({}, helper.baseOptions, options)),
-    );
+    return new Client(utils.deepExtend({}, helper.baseOptions, options));
 }

@@ -1,5 +1,5 @@
 "use strict";
-const cassandra = require("scylladb-javascript-driver");
+const cassandra = require("scylladb-nodejs-rs-driver");
 const { getClientArgs } = require("../util");
 
 const client = new cassandra.Client(getClientArgs());
@@ -16,8 +16,7 @@ client
     .then(function (result) {
         const row = result.rows[0];
         console.log("Obtained row: ", row);
-    })
-    .finally(() => client.shutdown());
+    });
 
 // Exit on unhandledRejection
 process.on("unhandledRejection", (reason) => {

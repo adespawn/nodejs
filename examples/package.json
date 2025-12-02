@@ -1,11 +1,11 @@
 {
   "name": "scylladb-javascript-driver-examples",
   "description": "Example usage of the driver",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "Apache-2.0",
   "private": true,
   "dependencies": {
-    "scylladb-javascript-driver": "file:./../",
+    "scylladb-nodejs-rs-driver": "file:./../",
     "async": "^1.5.2"
   }
 }

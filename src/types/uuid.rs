@@ -1,4 +1,4 @@
-use napi::{bindgen_prelude::Buffer, bindgen_prelude::BufferSlice, Error, Status};
+use napi::{Error, Status, bindgen_prelude::Buffer, bindgen_prelude::BufferSlice};
 use uuid::Uuid;
 
 #[napi]
@@ -29,4 +29,9 @@ impl UuidWrapper {
     pub fn get_cql_uuid(&self) -> Uuid {
         self.uuid
     }
+}
+
+#[napi]
+pub fn get_random_uuid_v4() -> Buffer {
+    Buffer::from(Uuid::new_v4().as_bytes().as_slice())
 }
