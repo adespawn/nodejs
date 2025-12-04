@@ -2,7 +2,7 @@ use napi::bindgen_prelude::{Buffer, ToNapiValue};
 use scylla::response::{PagingState, PagingStateResponse};
 
 use crate::{
-    errors::{JsResult, js_error, with_custom_error_sync},
+    errors::{JsResult, make_js_error, with_custom_error_sync},
     result::QueryResultWrapper,
 };
 
@@ -89,7 +89,7 @@ impl PagingStateResponseWrapper {
                 inner: match &self.inner {
                     PagingStateResponse::HasMorePages { state } => state.clone(),
                     PagingStateResponse::NoMorePages => {
-                        return Err(js_error("All pages transferred"));
+                        return Err(make_js_error("All pages transferred"));
                     }
                 },
             })

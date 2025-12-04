@@ -1,4 +1,4 @@
-use crate::errors::{ConvertedResult, JsResult, js_error, with_custom_error_sync};
+use crate::errors::{ConvertedResult, JsResult, make_js_error, with_custom_error_sync};
 use crate::utils::CharCounter;
 use regex::Regex;
 use scylla::value::CqlDate;
@@ -320,7 +320,7 @@ enum DateInvalid {
 
 impl From<DateInvalid> for napi::Error {
     fn from(value: DateInvalid) -> Self {
-        js_error(value)
+        make_js_error(value)
     }
 }
 

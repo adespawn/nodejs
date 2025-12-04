@@ -7,7 +7,7 @@ use scylla::statement::batch::Batch;
 use scylla::statement::{Consistency, SerialConsistency, Statement};
 
 use crate::errors::{
-    ConvertedError, ConvertedResult, JsResult, js_error, with_custom_error_async,
+    ConvertedError, ConvertedResult, JsResult, make_js_error, with_custom_error_async,
     with_custom_error_sync,
 };
 use crate::options;
@@ -309,15 +309,14 @@ macro_rules! make_apply_options {
             if let Some(o) = options.consistency {
                 statement.set_consistency(
                     Consistency::try_from(o)
-                        .map_err(|_| js_error(format!("Unknown consistency value: {o}")))?,
+                        .map_err(|_| make_js_error(format!("Unknown consistency value: {o}")))?,
                 );
             }
 
             if let Some(o) = options.serial_consistency {
-                statement
-                    .set_serial_consistency(Some(SerialConsistency::try_from(o).map_err(
-                        |_| js_error(format!("Unknown serial consistency value: {o}")),
-                    )?));
+                statement.set_serial_consistency(Some(SerialConsistency::try_from(o).map_err(
+                    |_| make_js_error(format!("Unknown serial consistency value: {o}")),
+                )?));
             }
 
             if let Some(o) = options.is_idempotent {
@@ -354,7 +353,7 @@ macro_rules! make_non_batch_apply_options {
             let mut statement_with_part_of_options_applied = $partial_name(statement, options)?;
             if let Some(o) = options.fetch_size {
                 if !o.is_positive() {
-                    return Err(ConvertedError::from(js_error(
+                    return Err(ConvertedError::from(make_js_error(
                         "fetch size must be a positive value",
                     )));
                 }

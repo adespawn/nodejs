@@ -1,7 +1,7 @@
 pub mod from_napi_obj;
 pub mod to_napi_obj;
 
-use crate::errors::{ConvertedError, ConvertedResult, js_error};
+use crate::errors::{ConvertedError, ConvertedResult, make_js_error};
 use napi::bindgen_prelude::BigInt;
 use std::fmt::{self, Display};
 
@@ -12,7 +12,7 @@ pub(crate) fn bigint_to_i64(value: BigInt, error_msg: impl Display) -> Converted
         if value.sign_bit && value.words.first().unwrap_or(&0) == &i64::MIN.unsigned_abs() {
             return Ok(i64::MIN);
         }
-        return Err(ConvertedError::from(js_error(error_msg)));
+        return Err(ConvertedError::from(make_js_error(error_msg)));
     }
     Ok(value.words[0] as i64 * if value.sign_bit { -1 } else { 1 })
 }

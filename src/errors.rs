@@ -184,7 +184,7 @@ impl ToNapiValue for ConvertedError {
         val: Self,
     ) -> napi::Result<napi::sys::napi_value> {
         let env = Env::from_raw(env);
-        let mut e = env.create_error(js_error(val.msg))?;
+        let mut e = env.create_error(make_js_error(val.msg))?;
 
         e.set_named_property("name", val.name)?;
 
@@ -219,8 +219,8 @@ where
 }
 
 /// Create napi::Error from a message
-pub(crate) fn js_error<T: Display>(e: T) -> napi::Error {
-    js_typed_error(e, ErrorType::Error)
+pub(crate) fn make_js_error<T: Display>(e: T) -> napi::Error {
+    napi::Error::new(Status::GenericFailure, e)
 }
 
 /// Create napi::Error from a message and error type

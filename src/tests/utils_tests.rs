@@ -1,6 +1,6 @@
 use napi::bindgen_prelude::BigInt;
 
-use crate::errors::{ConvertedError, JsResult, js_error, with_custom_error_sync};
+use crate::errors::{ConvertedError, JsResult, make_js_error, with_custom_error_sync};
 use crate::utils::bigint_to_i64;
 
 #[napi]
@@ -30,7 +30,7 @@ pub fn tests_bigint_to_i64(value: BigInt, case_id: Option<i32>) -> JsResult<()> 
                 if v == expected {
                     Ok(())
                 } else {
-                    Err(ConvertedError::from(js_error(format!(
+                    Err(ConvertedError::from(make_js_error(format!(
                         "Got {v}, expected{expected}"
                     ))))
                 }

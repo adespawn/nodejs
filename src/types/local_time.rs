@@ -1,4 +1,6 @@
-use crate::errors::{ConvertedError, ConvertedResult, JsResult, js_error, with_custom_error_sync};
+use crate::errors::{
+    ConvertedError, ConvertedResult, JsResult, make_js_error, with_custom_error_sync,
+};
 use crate::utils::{CharCounter, bigint_to_i64};
 use napi::bindgen_prelude::BigInt;
 use scylla::value::CqlTime;
@@ -86,7 +88,7 @@ impl LocalTimeWrapper {
 
             match lambda(s) {
                 Ok(x) => Ok(BigInt::from(x)),
-                Err(_) => Err(ConvertedError::from(js_error(
+                Err(_) => Err(ConvertedError::from(make_js_error(
                     "Conversion to String failed",
                 ))),
             }

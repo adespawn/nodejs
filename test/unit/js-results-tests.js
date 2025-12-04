@@ -24,7 +24,7 @@ describe("JsResult", function () {
             assert.fail("This function should throw");
         } catch (e) {
             helper.assertInstanceOf(e, Error);
-            assert.strictEqual(e.message, "Error#Napi-error");
+            assert.strictEqual(e.message, "Napi-error");
             assert.strictEqual(e.name, "Error");
         }
     });
@@ -65,7 +65,7 @@ describe("JsResult", function () {
                 },
                 (e) => {
                     helper.assertInstanceOf(e, Error);
-                    assert.strictEqual(e.message, "Error#Napi-error");
+                    assert.strictEqual(e.message, "Napi-error");
                     assert.strictEqual(e.name, "Error");
                     done();
                 },
@@ -80,7 +80,7 @@ describe("JsResult", function () {
             await rust.testsReturnJsResultAsync(3);
         } catch (e) {
             helper.assertInstanceOf(e, Error);
-            assert.strictEqual(e.message, "Error#Napi-error");
+            assert.strictEqual(e.message, "Napi-error");
             assert.strictEqual(e.name, "Error");
         }
     });
