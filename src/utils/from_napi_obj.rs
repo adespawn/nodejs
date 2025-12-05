@@ -40,7 +40,10 @@
 /// ```
 macro_rules! define_js_to_rust_convertible_object {
     ($struct_name: ident{$($field_name:ident, $js_name:ident: $field_type:ty),*}) => {
-        #[derive(Debug)]
+        // The PartialEq and Eq are used only for testing purposes
+        // If at some point those traits become a problem, feel free to remove them
+        // Or update the macro to make them optional
+        #[derive(Debug, PartialEq, Eq)]
         pub struct $struct_name {
             $(
                 pub $field_name: Option<$field_type>,
