@@ -1,20 +1,16 @@
 use scylla::{statement::Statement, value::Row};
-use std::env;
 use uuid::Uuid;
 
-use crate::common;
+use crate::common::{self, SIMPLE_INSERT_QUERY};
 
 pub async fn parametrized_select_benchmark(
     num_of_rows: i32,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let n: i32 = env::var("CNT")
-        .ok()
-        .and_then(|s: String| s.parse::<i32>().ok())
-        .expect("CNT parameter is required.");
+    let n: i32 = common::get_cnt();
 
-    let session = common::init_simple_table().await?;
+    let session = common::init_simple_table_caching().await?;
 
-    let insert_query = "INSERT INTO benchmarks.basic (id, val) VALUES (?, ?)";
+    let insert_query = SIMPLE_INSERT_QUERY;
     for _ in 0..num_of_rows {
         // use CachingSession as it is used in the scylla-javascript-driver
         let statement: Statement = insert_query.into();

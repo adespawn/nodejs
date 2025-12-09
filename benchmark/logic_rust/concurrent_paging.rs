@@ -2,6 +2,8 @@ use scylla::{response::PagingState, statement::Statement};
 use std::{env, ops::ControlFlow, sync::Arc};
 use uuid::Uuid;
 
+use crate::common::SIMPLE_INSERT_QUERY;
+
 mod common;
 
 const CONCURRENCY_LEVEL: usize = 20;
@@ -12,9 +14,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s: String| s.parse::<i32>().ok())
         .expect("CNT parameter is required.");
 
-    let session = Arc::new(common::init_simple_table().await?);
+    let session = Arc::new(common::init_simple_table_caching().await?);
 
-    let insert_query = "INSERT INTO benchmarks.basic (id, val) VALUES (?, ?)";
+    let insert_query = SIMPLE_INSERT_QUERY;
     for _ in 0..50 {
         // use CachingSession as it is used in the scylla-javascript-driver
         let statement: Statement = insert_query.into();
