@@ -5,6 +5,7 @@ const assert = require("assert");
 
 const { _Client } = require("../../main");
 const cassandra = require(process.argv[2]);
+const { exit } = require("process");
 
 const tableSchemaBasic = "CREATE TABLE benchmarks.basic (id uuid, val int, PRIMARY KEY(id))";
 const tableSchemaDeSer = "CREATE TABLE benchmarks.basic (id uuid, val int, tuuid timeuuid, ip inet, date date, time time, PRIMARY KEY(id))";
@@ -148,6 +149,13 @@ async function checkRowCount(client, expected, next) {
     next();
 }
 
+function onError(err) {
+    if (err) {
+        console.error("Error: ", err.message, err.stack);
+        exit(1);
+    }
+}
+
 exports.insertDeSer = insertDeSer;
 exports.tableSchemaBasic = tableSchemaBasic;
 exports.tableSchemaDeSer = tableSchemaDeSer;
@@ -161,3 +169,4 @@ exports.insertSimple = insertSimple;
 exports.queryWithRowCheck = queryWithRowCheck;
 exports.executeInsertDeSer = executeInsertDeSer;
 exports.checkRowCount = checkRowCount;
+exports.onError = onError;
