@@ -999,9 +999,7 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        // No support for queryTrace flag
-        // TODO: Fix this test
-        /* it("should retrieve the trace id when queryTrace flag is set", function (done) {
+        it("should retrieve the trace id when queryTrace flag is set", function (done) {
             const client = setupInfo.client;
             const id = types.Uuid.random();
             utils.series(
@@ -1073,7 +1071,7 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
         it("should not retrieve trace id by default", function (done) {
             const client = setupInfo.client;
