@@ -758,9 +758,7 @@ describe("Client", function () {
                 );
             },
         );
-        // TODO: Fix this test
-        // No support for trace ID
-        /* it("should retrieve the trace id when queryTrace flag is set", function (done) {
+        it("should retrieve the trace id when queryTrace flag is set", function (done) {
             const client = newInstance({
                 keyspace: setupInfo.keyspace,
                 queryOptions: { consistency: types.consistencies.quorum },
@@ -844,7 +842,7 @@ describe("Client", function () {
                 ],
                 done,
             );
-        }); */
+        });
         // TODO: Fix this test
         // Rust driver throws an error, instead of returning a warning
         /* vit(
