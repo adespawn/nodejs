@@ -305,27 +305,9 @@ impl SessionWrapper {
         .await
     }
 
-    /// Creates object representing a prepared batch of statements.
-    /// Requires each passed statement to be already prepared.
+    /// Creates object representing batch of statements.
     #[napi]
-    pub fn create_prepared_batch(
-        &self,
-        statements: Vec<String>,
-        options: &QueryOptionsWrapper,
-    ) -> JsResult<BatchWrapper> {
-        with_custom_error_sync(|| {
-            let mut batch: Batch = Default::default();
-            statements
-                .iter()
-                .for_each(|q| batch.append_statement(q.as_str()));
-            batch = self.apply_batch_options(batch, &options.options)?;
-            ConvertedResult::Ok(BatchWrapper { inner: batch })
-        })
-    }
-
-    /// Creates object representing unprepared batch of statements.
-    #[napi]
-    pub fn create_unprepared_batch(
+    pub fn create_batch(
         &self,
         statements: Vec<String>,
         options: &QueryOptionsWrapper,
