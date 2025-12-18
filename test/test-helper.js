@@ -297,6 +297,12 @@ const helper = {
         );
     },
 
+    assertErrorWithName: function (err, name) {
+        assert.ok(err, "Expected to receive an error");
+        assert.instanceOf(err, Error);
+        assert.strictEqual(err.name, name);
+    },
+
     /**
      * Asserts that the value has some properties defined and the value of those properties
      * @param {Object} value
@@ -390,15 +396,13 @@ const helper = {
             if (err) {
                 return callback(err);
             }
-            // No support for client.hosts field
-            // TODO: Fix this
-            /* if (!client.hosts) {
+            if (!client.hosts) {
                 throw new Error("No hosts on Client");
             }
             if (client.hosts.length === 1) {
                 return callback();
-            } */
-            setTimeout(callback, 200 /* * client.hosts.length */);
+            }
+            setTimeout(callback, 200 * client.hosts.length);
         };
     },
     /**

@@ -1,4 +1,6 @@
 /* eslint-disable no-unused-vars */
+// Ignore fields in a snake_case that are representing UDT values
+/* eslint camelcase: ["error", {"properties": "never"}] */
 "use strict";
 const assert = require("assert");
 const util = require("util");
@@ -38,22 +40,13 @@ describe("Client @SERVER_API", function () {
             });
         });
 
-        // Would require error throwing refactor
-        // TODO: Fix this test
         it("should callback with syntax error", function (done) {
             const client = setupInfo.client;
             client.connect(function (err) {
                 assert.ifError(err);
                 const query = "SELECT WILL FAIL";
                 client.execute(query, function (err, result) {
-                    assert.ok(err);
-                    assert.ok(err instanceof Error);
-                    assert.ok(err.message.includes("syntax error"));
-                    // assert.strictEqual(
-                    //     err.code,
-                    //     types.responseErrorCodes.syntaxError,
-                    // );
-                    // assert.strictEqual(err.query, query);
+                    helper.assertErrorWithName(err, "ExecutionError");
                     assert.equal(result, null);
                     done();
                 });
@@ -69,8 +62,6 @@ describe("Client @SERVER_API", function () {
             });
         });
 
-        // Would require error throwing refactor
-        // TODO: Fix this test
         context("with incorrect query parameters", () => {
             const client = setupInfo.client;
             const query = `INSERT INTO ${table} (id, bigint_sample) VALUES (?, ?)`;
@@ -84,25 +75,13 @@ describe("Client @SERVER_API", function () {
                     ],
                     (params, next) =>
                         client.execute(query, params, (err) => {
-                            helper.assertInstanceOf(err, Error);
-                            assert.ok(
-                                err.message.includes(
-                                    "Failed to serialize query parameters",
-                                ),
-                            );
-                            /* helper.assertInstanceOf(err, errors.ResponseError);
-                            assert.strictEqual(
-                                err.code,
-                                types.responseErrorCodes.invalid,
-                            ); */
+                            helper.assertErrorWithName(err, "ExecutionError");
                             next();
                         }),
                     done,
                 );
             });
 
-            // Would require error throwing refactor
-            // TODO: Fix this test
             it("should callback with error when the parameter types do not match", (done) => {
                 utils.eachSeries(
                     [
@@ -111,19 +90,7 @@ describe("Client @SERVER_API", function () {
                     ],
                     (params, next) =>
                         client.execute(query, params, (err) => {
-                            // Would require error throwing refactor
-                            // TODO: fix this test
-                            helper.assertInstanceOf(err, Error);
-                            assert.ok(
-                                err.message.includes(
-                                    "Database returned an error",
-                                ),
-                            );
-                            /* helper.assertInstanceOf(err, errors.ResponseError);
-                            assert.strictEqual(
-                                err.code,
-                                types.responseErrorCodes.invalid,
-                            ); */
+                            helper.assertErrorWithName(err, "ExecutionError");
                             next();
                         }),
                     done,
@@ -161,9 +128,7 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        // Would require #191
-        // TODO: Fix this test
-        /* it("should support retrieving empty buffers as values", () => {
+        it("should support retrieving empty buffers as values", () => {
             // Include some columns to make sure the behaviour is consistent across different types.
             // Inserting empty buffers fails server side for some types, e.g., "Not enough bytes to read a list"
             const columnsAsNulls = [
@@ -200,7 +165,7 @@ describe("Client @SERVER_API", function () {
                         utils.allocBufferUnsafe(0),
                     );
                 });
-        }); */
+        });
 
         it("should handle 250 parallel queries", function (done) {
             const client = setupInfo.client;
@@ -213,6 +178,23 @@ describe("Client @SERVER_API", function () {
             );
         });
 
+        it("should return valid queried host info", function (done) {
+            const client = setupInfo.client;
+            client.execute(helper.queries.basic, function (err, result) {
+                assert.equal(err, null);
+                assert.notEqual(result, null);
+
+                for (const host of client.hosts.values()) {
+                    if (host.address === result.info.queriedHost) {
+                        done();
+                        return;
+                    }
+                }
+                assert.fail(
+                    "Expected queried host to be part of the client's host map",
+                );
+            });
+        });
         it("should fail if non-existent profile provided", function (done) {
             const client = newInstance();
             utils.series(
@@ -224,6 +206,7 @@ describe("Client @SERVER_API", function () {
                             { executionProfile: "none" },
                             function (err) {
                                 assert.ok(err);
+                                // This error is thrown by the JS part of the code
                                 helper.assertInstanceOf(
                                     err,
                                     errors.ArgumentError,
@@ -506,17 +489,9 @@ describe("Client @SERVER_API", function () {
                                 params,
                                 { hints: [[]] },
                                 function (err) {
-                                    helper.assertInstanceOf(err, Error);
-                                    // Would require error throwing refactor
-                                    // TODO: Fix this test
-                                    /* helper.assertNotInstanceOf(
+                                    helper.assertErrorWithName(
                                         err,
-                                        errors.NoHostAvailableError,
-                                    ); */
-                                    assert.ok(
-                                        err.message.includes(
-                                            "Type information not valid",
-                                        ),
+                                        "TypeError",
                                     );
                                     next();
                                 },
@@ -528,17 +503,9 @@ describe("Client @SERVER_API", function () {
                                 params,
                                 { hints: ["zzz", "mmmm"] },
                                 function (err) {
-                                    helper.assertInstanceOf(err, Error);
-                                    // Would require error throwing refactor
-                                    // TODO: Fix this test
-                                    /* helper.assertNotInstanceOf(
+                                    helper.assertErrorWithName(
                                         err,
-                                        errors.NoHostAvailableError,
-                                    ); */
-                                    assert.ok(
-                                        err.message.includes(
-                                            "Data type with name zzz not valid",
-                                        ),
+                                        "TypeError",
                                     );
                                     next();
                                 },
@@ -802,23 +769,21 @@ describe("Client @SERVER_API", function () {
                                 result.columns[4].type.code,
                                 types.dataTypes.list,
                             );
-                            // TODO: Would require #245
-                            /* assert.ok(result.columns[4].type.info);
+                            assert.ok(result.columns[4].type.info);
                             assert.strictEqual(
                                 result.columns[4].type.info.code,
                                 types.dataTypes.int,
-                            ); */
+                            );
                             assert.strictEqual(
                                 result.columns[5].type.code,
                                 types.dataTypes.map,
                             );
-                            // TODO: Would require #245
-                            /* assert.ok(
+                            assert.ok(
                                 result.columns[5].type.info[0].code ===
-                                types.dataTypes.text ||
-                                result.columns[5].type.info[0].code ===
-                                types.dataTypes.varchar,
-                            ); */
+                                    types.dataTypes.text ||
+                                    result.columns[5].type.info[0].code ===
+                                        types.dataTypes.varchar,
+                            );
                             next();
                         });
                     },
@@ -912,10 +877,7 @@ describe("Client @SERVER_API", function () {
                                 { executionProfile: "cl" },
                                 function (err) {
                                     // expect an error as we used an invalid serial CL.
-                                    assert.ok(err);
-                                    // TODO: Would require error throwing refactor
-                                    helper.assertInstanceOf(err, Error);
-                                    // assert.strictEqual(err.code, 0x2200); // should be an invalid query.
+                                    helper.assertErrorWithName(err, "Error");
                                     next();
                                 },
                             );
@@ -999,9 +961,7 @@ describe("Client @SERVER_API", function () {
             );
         });
 
-        // No support for queryTrace flag
-        // TODO: Fix this test
-        /* it("should retrieve the trace id when queryTrace flag is set", function (done) {
+        it("should retrieve the trace id when queryTrace flag is set", function (done) {
             const client = setupInfo.client;
             const id = types.Uuid.random();
             utils.series(
@@ -1073,7 +1033,7 @@ describe("Client @SERVER_API", function () {
                 ],
                 done,
             );
-        }); */
+        });
 
         it("should not retrieve trace id by default", function (done) {
             const client = setupInfo.client;
@@ -1238,8 +1198,7 @@ describe("Client @SERVER_API", function () {
                     done,
                 );
             });
-            // TODO: Add support for column information retrieval
-            /* vit("2.1", "should retrieve column information", function (done) {
+            vit("2.1", "should retrieve column information", function (done) {
                 const client = setupInfo.client;
                 client.execute(
                     util.format(selectQuery, sampleId),
@@ -1319,7 +1278,7 @@ describe("Client @SERVER_API", function () {
                         done();
                     },
                 );
-            }); */
+            });
             vit("2.1", "should parse udt row", function (done) {
                 const client = setupInfo.client;
                 client.execute(
@@ -1541,8 +1500,10 @@ describe("Client @SERVER_API", function () {
                                         [id, tuple],
                                         { hints: [null, hint] },
                                         function (err, result) {
-                                            // TODO: This should probably be a SyntaxError
-                                            helper.assertInstanceOf(err, Error);
+                                            helper.assertErrorWithName(
+                                                err,
+                                                "TypeError",
+                                            );
                                             next();
                                         },
                                     );
@@ -2122,7 +2083,6 @@ describe("Client @SERVER_API", function () {
                         });
                 },
             );
-            // Would require error throwing refactor
             it("should reject the promise when there is a syntax error", function () {
                 const client = setupInfo.client;
                 return client
@@ -2134,12 +2094,7 @@ describe("Client @SERVER_API", function () {
                         throw new Error("should have been rejected");
                     })
                     .catch(function (err) {
-                        assert.ok(
-                            err.message.includes(
-                                "The submitted query has a syntax error",
-                            ),
-                        );
-                        // helper.assertInstanceOf(err, errors.ResponseError);
+                        helper.assertErrorWithName(err, "ExecutionError");
                     });
             });
         });

@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use openssl::ssl::{SslContextBuilder, SslMethod, SslVerifyMode};
 use scylla::client::SelfIdentity;
 use scylla::client::caching_session::CachingSession;
 use scylla::client::session_builder::SessionBuilder;
-use scylla::response::PagingState;
+use scylla::response::{PagingState, PagingStateResponse};
 use scylla::statement::batch::Batch;
 use scylla::statement::{Consistency, SerialConsistency, Statement};
 
@@ -11,7 +13,7 @@ use crate::errors::{
     with_custom_error_sync,
 };
 use crate::options;
-use crate::paging::{PagingResult, PagingStateWrapper};
+use crate::paging::{PagingResult, PagingResultWithExecutor, PagingStateWrapper};
 use crate::requests::request::{QueryOptionsObj, QueryOptionsWrapper};
 use crate::types::encoded_data::EncodedValuesWrapper;
 use crate::types::type_wrappers::ComplexType;
@@ -27,7 +29,7 @@ const DEFAULT_CACHE_SIZE: u32 = 512;
 // This specific option is added, as it's used in the existing integration tests
 #[rustfmt::skip] // fmt splits the struct definition into multiple lines
 define_js_to_rust_convertible_object!(SslOptions {
-    reject_unauthorized, rejectUnauthorized: bool
+    reject_unauthorized, rejectUnauthorized: bool,
 });
 
 define_js_to_rust_convertible_object!(SessionOptions {
@@ -39,7 +41,7 @@ define_js_to_rust_convertible_object!(SessionOptions {
     credentials_username, credentialsUsername: String,
     credentials_password, credentialsPassword: String,
     cache_size, cacheSize: u32,
-    ssl_options, sslOptions: SslOptions
+    ssl_options, sslOptions: SslOptions,
 });
 
 #[napi]
@@ -50,6 +52,85 @@ pub struct BatchWrapper {
 #[napi]
 pub struct SessionWrapper {
     pub(crate) inner: CachingSession,
+}
+
+/// This object allows executing queries for following pages of the result,
+/// without the need to pass the statement and parameters multiple times.
+/// This structure is tied to specific session.
+#[napi]
+pub struct QueryExecutor {
+    params: Arc<Vec<EncodedValuesWrapper>>,
+    statement: Arc<Statement>,
+    is_prepared: bool,
+}
+
+impl QueryExecutor {
+    fn new(
+        statement: Arc<Statement>,
+        params: Arc<Vec<EncodedValuesWrapper>>,
+        is_prepared: bool,
+    ) -> Self {
+        QueryExecutor {
+            statement,
+            params,
+            is_prepared,
+        }
+    }
+}
+
+impl QueryExecutor {
+    async fn fetch_next_page_internal(
+        &self,
+        session: &SessionWrapper,
+        paging_state: Option<&PagingStateWrapper>,
+    ) -> ConvertedResult<PagingResult> {
+        let paging_state = paging_state
+            .map(|e| e.inner.clone())
+            .unwrap_or(PagingState::start());
+
+        let (result, paging_state_response) = if self.is_prepared {
+            session
+                .inner
+                .execute_single_page(
+                    Statement::clone(self.statement.as_ref()),
+                    self.params.as_ref(),
+                    paging_state,
+                )
+                .await
+        } else {
+            session
+                .inner
+                .get_session()
+                .query_single_page(
+                    Statement::clone(self.statement.as_ref()),
+                    self.params.as_ref(),
+                    paging_state,
+                )
+                .await
+        }?;
+
+        Ok(PagingResult {
+            result: QueryResultWrapper::from_query(result)?,
+            paging_state: match paging_state_response {
+                PagingStateResponse::HasMorePages { state } => {
+                    Some(PagingStateWrapper { inner: state })
+                }
+                PagingStateResponse::NoMorePages => None,
+            },
+        })
+    }
+}
+#[napi]
+impl QueryExecutor {
+    #[napi]
+    pub async fn fetch_next_page(
+        &self,
+        session: &SessionWrapper,
+        paging_state: Option<&PagingStateWrapper>,
+    ) -> JsResult<PagingResult> {
+        with_custom_error_async(async || self.fetch_next_page_internal(session, paging_state).await)
+            .await
+    }
 }
 
 #[napi]
@@ -94,7 +175,8 @@ impl SessionWrapper {
         options: &QueryOptionsWrapper,
     ) -> JsResult<QueryResultWrapper> {
         with_custom_error_async(async || {
-            let statement: Statement = apply_statement_options(query.into(), &options.options)?;
+            let statement: Statement =
+                self.apply_statement_options(query.into(), &options.options)?;
             let query_result = self
                 .inner
                 .get_session()
@@ -143,7 +225,7 @@ impl SessionWrapper {
         options: &QueryOptionsWrapper,
     ) -> JsResult<QueryResultWrapper> {
         with_custom_error_async(async || {
-            let query = apply_statement_options(query.into(), &options.options)?;
+            let query = self.apply_statement_options(query.into(), &options.options)?;
             QueryResultWrapper::from_query(self.inner.execute_unpaged(query, params).await?)
         })
         .await
@@ -177,23 +259,19 @@ impl SessionWrapper {
         params: Vec<EncodedValuesWrapper>,
         options: &QueryOptionsWrapper,
         paging_state: Option<&PagingStateWrapper>,
-    ) -> JsResult<PagingResult> {
+    ) -> JsResult<PagingResultWithExecutor> {
         with_custom_error_async(async || {
-            let statement: Statement = apply_statement_options(query.into(), &options.options)?;
-            let paging_state = paging_state
-                .map(|e| e.inner.clone())
-                .unwrap_or(PagingState::start());
+            let statement = Arc::new(self.apply_statement_options(query.into(), &options.options)?);
 
-            let (result, paging_state_response) = self
-                .inner
-                .get_session()
-                .query_single_page(statement, params, paging_state)
+            let params = Arc::new(params);
+
+            let executor = QueryExecutor::new(statement, params, false);
+
+            let res = executor
+                .fetch_next_page_internal(self, paging_state)
                 .await?;
 
-            ConvertedResult::Ok(PagingResult {
-                result: QueryResultWrapper::from_query(result)?,
-                paging_state: paging_state_response.into(),
-            })
+            ConvertedResult::Ok(res.with_executor(executor))
         })
         .await
     }
@@ -210,41 +288,40 @@ impl SessionWrapper {
         params: Vec<EncodedValuesWrapper>,
         options: &QueryOptionsWrapper,
         paging_state: Option<&PagingStateWrapper>,
-    ) -> JsResult<PagingResult> {
+    ) -> JsResult<PagingResultWithExecutor> {
         with_custom_error_async(async || {
-            let paging_state = paging_state
-                .map(|e| e.inner.clone())
-                .unwrap_or(PagingState::start());
-            let prepared = apply_statement_options(query.into(), &options.options)?;
+            let statement = Arc::new(self.apply_statement_options(query.into(), &options.options)?);
 
-            let (result, paging_state) = self
-                .inner
-                .execute_single_page(prepared, params, paging_state)
+            let params = Arc::new(params);
+
+            let executor = QueryExecutor::new(statement, params, true);
+
+            let res = executor
+                .fetch_next_page_internal(self, paging_state)
                 .await?;
-            ConvertedResult::Ok(PagingResult {
-                result: QueryResultWrapper::from_query(result)?,
-                paging_state: paging_state.into(),
-            })
+
+            ConvertedResult::Ok(res.with_executor(executor))
         })
         .await
     }
-}
 
-/// Creates object representing a prepared batch of statements.
-/// Requires each passed statement to be already prepared.
-#[napi]
-pub fn create_prepared_batch(
-    statements: Vec<String>,
-    options: &QueryOptionsWrapper,
-) -> JsResult<BatchWrapper> {
-    with_custom_error_sync(|| {
-        let mut batch: Batch = Default::default();
-        statements
-            .iter()
-            .for_each(|q| batch.append_statement(q.as_str()));
-        batch = apply_batch_options(batch, &options.options)?;
-        ConvertedResult::Ok(BatchWrapper { inner: batch })
-    })
+    /// Creates object representing batch of statements.
+    #[napi]
+    pub fn create_batch(
+        &self,
+        statements: Vec<String>,
+        options: &QueryOptionsWrapper,
+    ) -> JsResult<BatchWrapper> {
+        with_custom_error_sync(|| {
+            let mut batch: Batch = Default::default();
+            statements
+                .into_iter()
+                .for_each(|q| batch.append_statement(q.as_str()));
+
+            batch = self.apply_batch_options(batch, &options.options)?;
+            ConvertedResult::Ok(BatchWrapper { inner: batch })
+        })
+    }
 }
 
 fn configure_session_builder(options: &SessionOptions) -> ConvertedResult<SessionBuilder> {
@@ -282,60 +359,49 @@ fn configure_session_builder(options: &SessionOptions) -> ConvertedResult<Sessio
     Ok(builder)
 }
 
-/// Creates object representing unprepared batch of statements.
-#[napi]
-pub fn create_unprepared_batch(
-    statements: Vec<String>,
-    options: &QueryOptionsWrapper,
-) -> JsResult<BatchWrapper> {
-    with_custom_error_sync(|| {
-        let mut batch: Batch = Default::default();
-        statements
-            .into_iter()
-            .for_each(|q| batch.append_statement(q.as_str()));
-
-        batch = apply_batch_options(batch, &options.options)?;
-        ConvertedResult::Ok(BatchWrapper { inner: batch })
-    })
-}
-
 /// Macro to allow applying options to any query type
 macro_rules! make_apply_options {
     ($statement_type: ty, $fn_name: ident) => {
-        fn $fn_name(
-            mut statement: $statement_type,
-            options: &QueryOptionsObj,
-        ) -> ConvertedResult<$statement_type> {
-            if let Some(o) = options.consistency {
-                statement.set_consistency(
-                    Consistency::try_from(o)
-                        .map_err(|_| make_js_error(format!("Unknown consistency value: {o}")))?,
-                );
-            }
+        impl SessionWrapper {
+            fn $fn_name(
+                &self,
+                mut statement: $statement_type,
+                options: &QueryOptionsObj,
+            ) -> ConvertedResult<$statement_type> {
+                if let Some(o) = options.consistency {
+                    statement.set_consistency(
+                        Consistency::try_from(o).map_err(|_| {
+                            make_js_error(format!("Unknown consistency value: {o}"))
+                        })?,
+                    );
+                }
 
-            if let Some(o) = options.serial_consistency {
-                statement.set_serial_consistency(Some(SerialConsistency::try_from(o).map_err(
-                    |_| make_js_error(format!("Unknown serial consistency value: {o}")),
-                )?));
-            }
+                if let Some(o) = options.serial_consistency {
+                    statement.set_serial_consistency(Some(
+                        SerialConsistency::try_from(o).map_err(|_| {
+                            make_js_error(format!("Unknown serial consistency value: {o}"))
+                        })?,
+                    ));
+                }
 
-            if let Some(o) = options.is_idempotent {
-                statement.set_is_idempotent(o);
-            }
+                if let Some(o) = options.is_idempotent {
+                    statement.set_is_idempotent(o);
+                }
 
-            if let Some(o) = &options.timestamp {
-                statement.set_timestamp(Some(bigint_to_i64(
-                    o.clone(),
-                    "Timestamp cannot overflow i64",
-                )?));
-            }
-            // TODO: Update it to allow collection of information from traced query
-            // Currently it's just passing the value, but not able to access any tracing information
-            if let Some(o) = options.trace_query {
-                statement.set_tracing(o);
-            }
+                if let Some(o) = &options.timestamp {
+                    statement.set_timestamp(Some(bigint_to_i64(
+                        o.clone(),
+                        "Timestamp cannot overflow i64",
+                    )?));
+                }
+                // TODO: Update it to allow collection of information from traced query
+                // Currently it's just passing the value, but not able to access any tracing information
+                if let Some(o) = options.trace_query {
+                    statement.set_tracing(o);
+                }
 
-            Ok(statement)
+                Ok(statement)
+            }
         }
     };
 }
@@ -344,22 +410,26 @@ macro_rules! make_apply_options {
 macro_rules! make_non_batch_apply_options {
     ($statement_type: ty, $fn_name: ident, $partial_name: ident) => {
         make_apply_options!($statement_type, $partial_name);
-        fn $fn_name(
-            statement: $statement_type,
-            options: &QueryOptionsObj,
-        ) -> ConvertedResult<$statement_type> {
-            // Statement with partial options applied -
-            // those that are common with batch queries
-            let mut statement_with_part_of_options_applied = $partial_name(statement, options)?;
-            if let Some(o) = options.fetch_size {
-                if !o.is_positive() {
-                    return Err(ConvertedError::from(make_js_error(
-                        "fetch size must be a positive value",
-                    )));
+        impl SessionWrapper {
+            fn $fn_name(
+                &self,
+                statement: $statement_type,
+                options: &QueryOptionsObj,
+            ) -> ConvertedResult<$statement_type> {
+                // Statement with partial options applied -
+                // those that are common with batch queries
+                let mut statement_with_part_of_options_applied =
+                    self.$partial_name(statement, options)?;
+                if let Some(o) = options.fetch_size {
+                    if !o.is_positive() {
+                        return Err(ConvertedError::from(make_js_error(
+                            "fetch size must be a positive value",
+                        )));
+                    }
+                    statement_with_part_of_options_applied.set_page_size(o);
                 }
-                statement_with_part_of_options_applied.set_page_size(o);
+                Ok(statement_with_part_of_options_applied)
             }
-            Ok(statement_with_part_of_options_applied)
         }
     };
 }
