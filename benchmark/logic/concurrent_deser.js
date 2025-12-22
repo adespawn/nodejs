@@ -12,15 +12,24 @@ const iterCnt = parseInt(process.argv[3]);
 async.series(
     [
         function initialize(next) {
-            utils.prepareDatabase(client, utils.tableSchemaBasic, next);
+            utils.prepareDatabase(client, utils.tableSchemaDeSer, next);
         },
         async function insert(next) {
-            utils.insertSimple(client, 10, next);
+            let allParameters = utils.insertConcurrentDeSer(cassandra, iterCnt);
+            try {
+                const _result = await cassandra.concurrent.executeConcurrent(client, allParameters, { prepare: true });
+            } catch (err) {
+                return next(err);
+            }
+            next();
         },
         async function select(next) {
-            let limited = async function (steps) {
+            let remaining = iterCnt;
+            while (remaining > 0) {
+                let currentStep = Math.min(remaining, 500);
+                remaining -= currentStep;
                 let allParameters = [];
-                for (let i = 0; i < steps; i++) {
+                for (let i = 0; i < currentStep; i++) {
                     allParameters.push({
                         query: 'SELECT * FROM benchmarks.basic',
                     });
@@ -28,16 +37,16 @@ async.series(
                 try {
                     const result = await cassandra.concurrent.executeConcurrent(client, allParameters, { prepare: true, collectResults: true });
                     for (let singleResult of result.resultItems) {
-                        assert.equal(singleResult.rowLength, 10);
+                        assert.equal(singleResult.rowLength, iterCnt);
                     }
                 } catch (err) {
                     return next(err);
                 }
             }
-            await utils.repeatCapped(limited, iterCnt);
             next();
         },
         function r() {
             exit(0);
         }
     ], utils.onError);
+

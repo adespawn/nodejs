@@ -11,23 +11,19 @@ const iterCnt = parseInt(process.argv[3]);
 async.series(
     [
         function initialize(next) {
-            utils.prepareDatabase(client, utils.tableSchemaBasic, next);
+            utils.prepareDatabase(client, utils.tableSchemaDeSer, next);
         },
         async function insert(next) {
-            for (let i = 0; i < iterCnt; i++) {
-                const id = cassandra.types.Uuid.random();
-                const query =
-                    "INSERT INTO benchmarks.basic (id, val) VALUES (?, ?)";
-                try {
-                    await client.execute(query, [id, 100], { prepare: true });
-                } catch (err) {
-                    return next(err);
-                }
+            let allParameters = utils.insertConcurrentDeSer(cassandra, iterCnt * iterCnt);
+            try {
+                await cassandra.concurrent.executeConcurrent(client, allParameters, { prepare: true });
+            } catch (err) {
+                return next(err);
             }
             next();
         },
         async function test(next) {
-            utils.checkRowCount(client, iterCnt, next);
+            utils.checkRowCount(client, iterCnt * iterCnt, next);
         },
         function r() {
             exit(0);

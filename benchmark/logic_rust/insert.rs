@@ -1,19 +1,17 @@
 use scylla::statement::Statement;
-use std::env;
 use uuid::Uuid;
+
+use crate::common::SIMPLE_INSERT_QUERY;
 
 mod common;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let n: i32 = env::var("CNT")
-        .ok()
-        .and_then(|s: String| s.parse::<i32>().ok())
-        .expect("CNT parameter is required.");
+    let n: i32 = common::get_cnt();
 
-    let session = common::init_simple_table().await?;
+    let session = common::init_simple_table_caching().await?;
 
-    let insert_query = "INSERT INTO benchmarks.basic (id, val) VALUES (?, ?)";
+    let insert_query = SIMPLE_INSERT_QUERY;
 
     for _ in 0..n {
         // use CachingSession as it is used in the scylla-javascript-driver
@@ -26,6 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .execute_unpaged(&prepared, (id, 100))
             .await?;
     }
+
+    common::check_row_cnt(session.get_session(), n).await?;
 
     Ok(())
 }
