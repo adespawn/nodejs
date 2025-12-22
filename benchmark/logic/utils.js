@@ -8,8 +8,9 @@ const cassandra = require(process.argv[2]);
 const { exit } = require("process");
 
 const tableSchemaBasic = "CREATE TABLE benchmarks.basic (id uuid, val int, PRIMARY KEY(id))";
-const tableSchemaDeSer = "CREATE TABLE benchmarks.basic (id uuid, val int, tuuid timeuuid, ip inet, date date, time time, PRIMARY KEY(id))";
-const DesSerInsertStatement = "INSERT INTO benchmarks.basic (id, val, tuuid, ip, date, time) VALUES (?, ?, ?, ?, ?, ?)";
+const tableSchemaDeSer = ["CREATE TYPE IF NOT EXISTS benchmarks.udt1 (field1 text, field2 int)",
+    "CREATE TABLE benchmarks.basic (id uuid, val int, tuuid timeuuid, ip inet, date date, time time, tuple frozen<tuple<text, int>>, udt frozen<udt1>, set1 set<int>, PRIMARY KEY(id))"];
+const DesSerInsertStatement = "INSERT INTO benchmarks.basic (id, val, tuuid, ip, date, time, tuple, udt, set1) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const singleStepCount = 1000000;
 
 function getClientArgs() {
@@ -22,7 +23,7 @@ function getClientArgs() {
 /**
  * 
  * @param {_Client} client 
- * @param {string} tableDefinition
+ * @param {string | [string]} tableDefinition
  * @param {Function} next 
  */
 async function prepareDatabase(client, tableDefinition, next) {
@@ -38,7 +39,12 @@ async function prepareDatabase(client, tableDefinition, next) {
         "DROP TABLE IF EXISTS benchmarks.basic";
     await client.execute(dropTable);
 
-    await client.execute(tableDefinition);
+    if (!Array.isArray(tableDefinition)) {
+        tableDefinition = [tableDefinition];
+    }
+    for (let definition of tableDefinition) {
+        await client.execute(definition);
+    }
 
     next();
 }
@@ -99,14 +105,21 @@ function insertDeSer(cassandra) {
     const date = cassandra.types.LocalDate.now();
     const time = cassandra.types.LocalTime.now();
 
-    return [id, 100, tuid, ip, date, time];
+    const tuple = new cassandra.types.Tuple(
+        "Litwo! Ojczyzno moja! ty jesteś jak zdrowie: Ile cię trzeba cenić, ten tylko się dowie, Kto cię stracił. Dziś piękność twą w całej ozdobie Widzę i opisuję, bo tęsknię po tobie.",
+        1,
+    );
+    const udt = { field1: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis congue egestas sapien id maximus eget.", field2: 4321 };
+    const set = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11];
+
+    return [id, 100, tuid, ip, date, time, tuple, udt, set];
 }
 
 function insertConcurrentDeSer(cassandra, n) {
     let allParameters = [];
     for (let i = 0; i < n; i++) {
         allParameters.push({
-            query: "INSERT INTO benchmarks.basic (id, val, tuuid, ip, date, time) VALUES (?, ?, ?, ?, ?, ?)",
+            query: DesSerInsertStatement,
             params: insertDeSer(cassandra)
         });
     }
