@@ -84,7 +84,7 @@ pub(crate) fn get_deser_data() -> (
     (&'static str, i32),
     Udt1,
     Vec<i32>,
-    CqlDuration
+    CqlDuration,
 ) {
     let id = Uuid::new_v4();
     let tuuid = CqlTimeuuid::from_str("8e14e760-7fa8-11eb-bc66-000000000001").unwrap();
@@ -98,7 +98,11 @@ pub(crate) fn get_deser_data() -> (
     );
     let udt = Udt1{ field1: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis congue egestas sapien id maximus eget.".to_owned(), field2: 4321 };
     let set = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 11];
-    let duration = CqlDuration{ months: 1, days: 2, nanoseconds: 3 };
+    let duration = CqlDuration {
+        months: 1,
+        days: 2,
+        nanoseconds: 3,
+    };
     (id, 100, tuuid, ip, date, time, tuple, udt, set, duration)
 }
 
