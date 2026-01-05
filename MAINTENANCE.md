@@ -11,7 +11,7 @@ The following document includes information on how to release scylladb-nodejs-rs
 When you add a new top level file or directory (i.e., one put directly in the repo's root), you need to consider
 if this file / directory is necessary for the NPM package. If you determine that this file should not be present
 in the released npm package (things like rust source code, linter configuration files, ...) you have to add this
-file to `.npmignore`. All files listed there will be **NOT** added to the npm package on release.
+file to `.npmignore`. All files listed there will **NOT** be added to the npm package on release.
 
 #### Removing files
 
@@ -33,4 +33,4 @@ to:
 `"scylladb-driver-alpha": "<just-released-version>"`,
 then run the following command:
 `npm i && node ./runner.js`
-<!-- The last step can potentially set up as a CI action step. -->
+<!-- The last step can potentially be set up as a CI action step. -->
