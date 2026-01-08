@@ -28,7 +28,7 @@
     "url": "https://github.com/scylladb/nodejs-rs-driver"
   },
   "dependencies": {
-    "@types/node": ">=8",
+    "@types/node": ">=20",
     "long": "~5.2.3"
   },
   "devDependencies": {
