@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@types/node": ">=8",
-    "adm-zip": "~0.5.10",
     "jsdoc": "^4.0.4",
     "long": "~5.2.3"
   },
