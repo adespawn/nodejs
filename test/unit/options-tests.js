@@ -27,6 +27,7 @@ describe("Client options", function () {
                     tokenAware: true,
                     permitDcFailover: false,
                     enableShufflingReplicas: false,
+                    allowList: ["127.0.0.1:7312"],
                 }),
             },
         };

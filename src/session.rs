@@ -5,6 +5,7 @@ use scylla::client::SelfIdentity;
 use scylla::client::caching_session::CachingSession;
 use scylla::client::execution_profile::ExecutionProfileBuilder;
 use scylla::client::session_builder::SessionBuilder;
+use scylla::policies::host_filter::AllowListHostFilter;
 use scylla::policies::load_balancing::{self, LoadBalancingPolicy};
 use scylla::response::{PagingState, PagingStateResponse};
 use scylla::statement::batch::Batch;
@@ -42,6 +43,8 @@ LoadBalancingConfig {
     token_aware, tokenAware: bool,
     permit_dc_failover, permitDcFailover: bool,
     enable_shuffling_replicas, enableShufflingReplicas: bool,
+    allow_list, allowList: Vec<String>,
+    
 });
 
 define_js_to_rust_convertible_object!(SessionOptions {
@@ -369,6 +372,16 @@ fn configure_session_builder(options: &SessionOptions) -> ConvertedResult<Sessio
 
         builder = builder.tls_context(Some(ssl_context_builder.build()));
     }
+
+    if let Some(allow_list) = options
+        .load_balancing_config
+        .as_ref()
+        .and_then(|c| c.allow_list.as_ref())
+    {
+        let host_filter = Arc::new(AllowListHostFilter::new(allow_list)?);
+        builder = builder.host_filter(host_filter);
+    }
+
     let mut exec_profile_builder = ExecutionProfileBuilder::default();
     if let Some(load_balancing_policy) =
         create_load_balancing_policy(&options.load_balancing_config)?
@@ -412,6 +425,7 @@ fn create_load_balancing_policy(
     if let Some(enable_shuffling_replicas) = config.enable_shuffling_replicas {
         builder = builder.enable_shuffling_replicas(enable_shuffling_replicas);
     }
+
     Ok(Some(builder.build()))
 }
 

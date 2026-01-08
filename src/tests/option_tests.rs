@@ -26,7 +26,8 @@ pub fn tests_check_client_option(options: SessionOptions, case: i32) {
                         prefer_rack: Some("Rack spec".to_owned()),
                         token_aware: Some(true),
                         permit_dc_failover: Some(false),
-                        enable_shuffling_replicas: Some(false)
+                        enable_shuffling_replicas: Some(false),
+                        allow_list: Some(vec!["127.0.0.1:7312".to_owned()]),
                     })
                 }
             )

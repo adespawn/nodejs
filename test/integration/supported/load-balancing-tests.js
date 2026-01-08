@@ -115,9 +115,7 @@ context("with a reusable 3 node cluster", function () {
             done,
         );
     });
-    // AllowListPolicy is not yet supported
-    // TODO: Fix this test
-    /* vdescribe("2.0", "AllowListPolicy", function () {
+    vdescribe("2.0", "AllowListPolicy", function () {
         it("should use the hosts in the allow list only", function (done) {
             const policy = new AllowListPolicy(new RoundRobinPolicy(), [
                 "127.0.0.1:9042",
@@ -146,7 +144,7 @@ context("with a reusable 3 node cluster", function () {
                 },
             );
         });
-    }); */
+    });
     vdescribe("2.0", "TokenAwarePolicy", function () {
         it("should target the correct replica for partition with logged keyspace", function (done) {
             utils.series(
