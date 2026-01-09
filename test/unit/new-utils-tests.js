@@ -140,7 +140,7 @@ describe("ensure64SignedInteger", function () {
         invalidValues.forEach((value) => {
             assert.throws(() => {
                 ensure64SignedInteger(value, "testValue");
-            }, TypeError, /testValue was expected to be 32bit integer/);
+            }, TypeError, /testValue was expected to be 64bit integer/);
         });
     });
 
@@ -153,13 +153,13 @@ describe("ensure64SignedInteger", function () {
         invalidValues.forEach((value) => {
             assert.throws(() => {
                 ensure64SignedInteger(value, "testValue");
-            }, TypeError, /testValue was expected to be 32bit integer/);
+            }, TypeError, /testValue was expected to be 64bit integer/);
         });
     });
 
     it("should use the provided name in error messages", function () {
         assert.throws(() => {
             ensure64SignedInteger(BigInt("9223372036854775808"), "customName");
-        }, TypeError, /customName was expected to be 32bit integer/);
+        }, TypeError, /customName was expected to be 64bit integer/);
     });
 });
