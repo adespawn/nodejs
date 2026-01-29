@@ -638,7 +638,6 @@ const helper = {
     },
     Map: MapPolyFill,
     Set: SetPolyFill,
-    AllowListPolicy: AllowListPolicy,
     /**
      * Determines if test tracing is enabled
      */
@@ -1933,42 +1932,6 @@ const dataProviderWithCollections = dataProvider
         },
     ]);
 helper.dataProviderWithCollections = dataProviderWithCollections;
-
-/**
- * For test purposes, filters the child policy by last octet of the ip address
- * @param {Array} list
- * @param [childPolicy]
- * @constructor
- */
-function AllowListPolicy(list, childPolicy) {
-    this.list = list;
-    this.childPolicy =
-        childPolicy || new policies.loadBalancing.RoundRobinPolicy();
-}
-
-util.inherits(AllowListPolicy, policies.loadBalancing.LoadBalancingPolicy);
-
-AllowListPolicy.prototype.init = function (client, hosts, callback) {
-    this.childPolicy.init(client, hosts, callback);
-};
-
-AllowListPolicy.prototype.newQueryPlan = function (keyspace, info, callback) {
-    const list = this.list;
-    this.childPolicy.newQueryPlan(keyspace, info, function (err, iterator) {
-        callback(err, {
-            next: function () {
-                let item = iterator.next();
-                while (!item.done) {
-                    if (list.indexOf(helper.lastOctetOf(item.value)) >= 0) {
-                        break;
-                    }
-                    item = iterator.next();
-                }
-                return item;
-            },
-        });
-    });
-};
 
 /**
  * Conditionally executes func if testVersion is <= the current cassandra version.
