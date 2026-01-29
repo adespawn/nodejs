@@ -639,7 +639,6 @@ const helper = {
     Map: MapPolyFill,
     Set: SetPolyFill,
     AllowListPolicy: AllowListPolicy,
-    FallthroughRetryPolicy: FallthroughRetryPolicy,
     /**
      * Determines if test tracing is enabled
      */
@@ -1970,21 +1969,6 @@ AllowListPolicy.prototype.newQueryPlan = function (keyspace, info, callback) {
         });
     });
 };
-
-function FallthroughRetryPolicy() {}
-
-util.inherits(FallthroughRetryPolicy, policies.retry.RetryPolicy);
-
-FallthroughRetryPolicy.prototype.onUnavailable = function () {
-    this.rethrowResult();
-};
-
-FallthroughRetryPolicy.prototype.onReadTimeout =
-    FallthroughRetryPolicy.prototype.onUnavailable;
-FallthroughRetryPolicy.prototype.onWriteTimeout =
-    FallthroughRetryPolicy.prototype.onUnavailable;
-FallthroughRetryPolicy.prototype.onRequestError =
-    FallthroughRetryPolicy.prototype.onUnavailable;
 
 /**
  * Conditionally executes func if testVersion is <= the current cassandra version.
