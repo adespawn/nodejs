@@ -1059,53 +1059,50 @@ const helper = {
  * A polyfill of Map, valid for testing. It does not support update of values
  * @constructor
  */
-function MapPolyFill(arr) {
-    this.arr = arr || [];
-    const self = this;
-    Object.defineProperty(this, "size", {
-        get: function () {
-            return self.arr.length;
-        },
-        configurable: false,
-    });
+class MapPolyFill {
+    constructor(arr) {
+        this.arr = arr || [];
+        const self = this;
+        Object.defineProperty(this, "size", {
+            get: function () {
+                return self.arr.length;
+            },
+            configurable: false,
+        });
+    }
+    set(k, v) {
+        this.arr.push([k, v]);
+    }
+    get(k) {
+        return this.arr.filter(function (item) {
+            return item[0] === k;
+        })[0];
+    }
+    forEach(callback) {
+        this.arr.forEach(function (item) {
+            // first the value, then the key
+            callback(item[1], item[0]);
+        });
+    }
+    toString() {
+        return this.arr.toString();
+    }
 }
 
-MapPolyFill.prototype.set = function (k, v) {
-    this.arr.push([k, v]);
-};
-
-MapPolyFill.prototype.get = function (k) {
-    return this.arr.filter(function (item) {
-        return item[0] === k;
-    })[0];
-};
-
-MapPolyFill.prototype.forEach = function (callback) {
-    this.arr.forEach(function (item) {
-        // first the value, then the key
-        callback(item[1], item[0]);
-    });
-};
-
-MapPolyFill.prototype.toString = function () {
-    return this.arr.toString();
-};
-
-function SetPolyFill(arr) {
-    this.arr = arr || [];
+class SetPolyFill {
+    constructor(arr) {
+        this.arr = arr || [];
+    }
+    forEach(cb, thisArg) {
+        this.arr.forEach(cb, thisArg);
+    }
+    add(x) {
+        this.arr.push(x);
+    }
+    toString() {
+        return this.arr.toString();
+    }
 }
-
-SetPolyFill.prototype.forEach = function (cb, thisArg) {
-    this.arr.forEach(cb, thisArg);
-};
-
-SetPolyFill.prototype.add = function (x) {
-    this.arr.push(x);
-};
-
-SetPolyFill.prototype.toString = function () {
-    return this.arr.toString();
-};
 
 // Core driver used ccmHelper
 helper.ccmHelper = helper.ccm;
