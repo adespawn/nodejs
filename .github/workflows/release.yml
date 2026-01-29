@@ -27,7 +27,7 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/setup
+      - uses: ./.github/common/setup
         with:
           node-version: 24
           host: ubuntu-latest

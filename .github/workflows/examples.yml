@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.host }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/setup
+      - uses: ./.github/common/setup
         with:
           host: ${{ matrix.host }}
           target: ${{ matrix.target }}
