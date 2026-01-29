@@ -32,13 +32,13 @@ const DEFAULT_CACHE_SIZE: u32 = 512;
 // the ssl connection (see: ConnectionOptions typescript class)
 // This specific option is added, as it's used in the existing integration tests
 #[rustfmt::skip] // fmt splits each field definition into multiple lines
-define_js_to_rust_convertible_object!(SslOptions {
+define_js_to_rust_convertible_object!(struct SslOptions {
     reject_unauthorized, rejectUnauthorized: bool,
 });
 
 #[rustfmt::skip] // fmt splits each field definition into multiple lines
 define_js_to_rust_convertible_object!(
-LoadBalancingConfig {
+struct LoadBalancingConfig {
     prefer_datacenter, preferDatacenter: String,
     prefer_rack, preferRack: String,
     token_aware, tokenAware: bool,
@@ -55,7 +55,8 @@ pub enum RetryPolicyKind {
     Fallthrough,
 }
 
-define_js_to_rust_convertible_object!(SessionOptions {
+define_js_to_rust_convertible_object!(
+struct SessionOptions {
     connect_points, connectPoints: Vec<String>,
     keyspace, keyspace: String,
     application_name, applicationName: String,
