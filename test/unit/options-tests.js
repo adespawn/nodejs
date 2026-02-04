@@ -1,7 +1,11 @@
 "use strict";
 
+const net = require("node:net");
 const rust = require("../../index");
 const { setRustOptions } = require("../../lib/client-options");
+const {
+    MappingAddressTranslator,
+} = require("../../lib/policies/address-resolution");
 const {
     DefaultLoadBalancingPolicy,
 } = require("../../lib/policies/load-balancing");
@@ -9,6 +13,12 @@ const { RetryPolicy } = require("../../lib/policies/retry");
 
 describe("Client options", function () {
     it("should correctly convert client options", function () {
+        let resolutionMap = new Map([
+            [
+                net.SocketAddress.parse("2.1.3.7:690"),
+                net.SocketAddress.parse("7.3.1.2:960"),
+            ],
+        ]);
         let options = {
             contactPoints: ["Contact point 1", "Contact point 2"],
             keyspace: "keyspace name",
@@ -31,6 +41,7 @@ describe("Client options", function () {
                     allowList: ["127.0.0.1:7312"],
                 }),
                 retry: new RetryPolicy(),
+                addressResolution: new MappingAddressTranslator(resolutionMap),
             },
         };
         rust.testsCheckClientOption(setRustOptions(options), 1);
