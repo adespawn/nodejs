@@ -317,7 +317,7 @@ const ccm = {
 
     spawn: function (processName, params, callback) {
         if (!callback) {
-            callback = function () {};
+            callback = function () { };
         }
         params = params || [];
         const originalProcessName = processName;
@@ -353,10 +353,10 @@ const ccm = {
             if (code !== 0) {
                 err = new Error(
                     "Error executing " +
-                        originalProcessName +
-                        ":\n" +
-                        info.stderr.join("\n") +
-                        info.stdout.join("\n"),
+                    originalProcessName +
+                    ":\n" +
+                    info.stderr.join("\n") +
+                    info.stdout.join("\n"),
                 );
                 err.info = info;
             }
@@ -451,8 +451,8 @@ const ads = {
             callbackOnce(
                 new Error(
                     "Timed out while waiting for " +
-                        processName +
-                        " to complete.",
+                    processName +
+                    " to complete.",
                 ),
             );
         }, 10000);
@@ -649,6 +649,52 @@ const helper = {
             keyspace: keyspace,
         };
     },
+
+    /**
+     * Creates a ccm cluster, initializes a Client instance the before() and after() hooks. 
+     * The client connects to the database via rust proxy. The wrapper for the proxy,
+     * to control it's behavior is also returned.
+     * @param {Number|String} nodeLength A number representing the amount of nodes in a single datacenter or a string
+     * representing the amount of nodes in each datacenter, ie: "3:4".
+     * @param {Object} [options]
+     * @param {Object} [options.ccmOptions]
+     * @param {Object} [options.clientOptions] The options to use to initialize the client.
+     * @param {String} [options.keyspace] Name of the keyspace to create.
+     * @param {Number} [options.replicationFactor] Keyspace replication factor.
+     * @param {Array<String>} [options.queries] Queries to run after client creation.
+     * @param {Boolean} [options.removeClusterAfter=true] Determines whether ccm remove should be called on after().
+     */
+    setupWithProxy: function (nodeLength, options) {
+        options = options || utils.emptyObject;
+        before(helper.ccmHelper.start(nodeLength || 1, options.ccmOptions));
+        let client;
+        let keyspace;
+        client = new Client(
+            utils.extend({}, options.clientOptions, helper.baseOptions),
+        );
+        before(client.connect.bind(client));
+        keyspace = options.keyspace || helper.getRandomName("ks");
+        before(
+            helper.toTask(
+                client.execute,
+                client,
+                helper.createKeyspaceCql(
+                    keyspace,
+                    options.replicationFactor,
+                ),
+            ),
+        );
+        before(helper.toTask(client.execute, client, "USE " + keyspace));
+        after(client.shutdown.bind(client));
+        if (options.removeClusterAfter !== false) {
+            after(helper.ccmHelper.remove);
+        }
+
+        return {
+            client: client,
+            keyspace: keyspace,
+        };
+    },
     /**
      * Sync throws the error
      * @type Function
@@ -721,23 +767,23 @@ const helper = {
     createTableCql: function (tableName) {
         return util.format(
             "CREATE TABLE %s (" +
-                "   id uuid primary key," +
-                "   ascii_sample ascii," +
-                "   text_sample text," +
-                "   int_sample int," +
-                "   bigint_sample bigint," +
-                "   float_sample float," +
-                "   double_sample double," +
-                "   decimal_sample decimal," +
-                "   blob_sample blob," +
-                "   boolean_sample boolean," +
-                "   timestamp_sample timestamp," +
-                "   inet_sample inet," +
-                "   timeuuid_sample timeuuid," +
-                "   map_sample map<text, text>," +
-                "   list_sample list<text>," +
-                "   list_sample2 list<int>," +
-                "   set_sample set<text>)",
+            "   id uuid primary key," +
+            "   ascii_sample ascii," +
+            "   text_sample text," +
+            "   int_sample int," +
+            "   bigint_sample bigint," +
+            "   float_sample float," +
+            "   double_sample double," +
+            "   decimal_sample decimal," +
+            "   blob_sample blob," +
+            "   boolean_sample boolean," +
+            "   timestamp_sample timestamp," +
+            "   inet_sample inet," +
+            "   timeuuid_sample timeuuid," +
+            "   map_sample map<text, text>," +
+            "   list_sample list<text>," +
+            "   list_sample2 list<int>," +
+            "   set_sample set<text>)",
             tableName,
         );
     },
@@ -749,25 +795,25 @@ const helper = {
     createTableWithClusteringKeyCql: function (tableName) {
         return util.format(
             "CREATE TABLE %s (" +
-                "   id1 uuid," +
-                "   id2 timeuuid," +
-                "   text_sample text," +
-                "   int_sample int," +
-                "   bigint_sample bigint," +
-                "   float_sample float," +
-                "   double_sample double," +
-                "   map_sample map<uuid, int>," +
-                "   list_sample list<timeuuid>," +
-                "   set_sample set<int>," +
-                "   PRIMARY KEY (id1, id2))",
+            "   id1 uuid," +
+            "   id2 timeuuid," +
+            "   text_sample text," +
+            "   int_sample int," +
+            "   bigint_sample bigint," +
+            "   float_sample float," +
+            "   double_sample double," +
+            "   map_sample map<uuid, int>," +
+            "   list_sample list<timeuuid>," +
+            "   set_sample set<int>," +
+            "   PRIMARY KEY (id1, id2))",
             tableName,
         );
     },
     createKeyspaceCql: function (keyspace, replicationFactor, durableWrites) {
         return util.format(
             "CREATE KEYSPACE %s" +
-                " WITH replication = {'class': 'SimpleStrategy', 'replication_factor' : %d}" +
-                " AND durable_writes = %s;",
+            " WITH replication = {'class': 'SimpleStrategy', 'replication_factor' : %d}" +
+            " AND durable_writes = %s;",
             keyspace,
             replicationFactor || 1,
             !!durableWrites,
@@ -811,9 +857,9 @@ const helper = {
         assert.ok(
             instance instanceof constructor,
             "Expected instance of " +
-                constructor.name +
-                ", actual constructor: " +
-                instance.constructor.name,
+            constructor.name +
+            ", actual constructor: " +
+            instance.constructor.name,
         );
     },
 
@@ -826,9 +872,9 @@ const helper = {
         assert.ok(
             !(instance instanceof constructor),
             "Expected instance different than " +
-                constructor.name +
-                ", actual constructor: " +
-                instance.constructor.name,
+            constructor.name +
+            ", actual constructor: " +
+            instance.constructor.name,
         );
     },
 
