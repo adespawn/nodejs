@@ -35,6 +35,9 @@ pub fn tests_socket_addr_wrapper(socket_addr: SocketAddrWrapper, case_id: i32) {
             assert_eq!(socket.ip().to_string(), "::");
             assert_eq!(socket.port(), 65535);
         }
-        _ => panic!("Unexpected test case_id: {}", case_id),
+        _ => panic!(
+            "Unexpected test case_id: {}. Expected value between 1 and 6",
+            case_id
+        ),
     }
 }
